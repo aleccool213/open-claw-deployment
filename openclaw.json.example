@@ -1,0 +1,39 @@
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "zen/x-ai/grok-code-fast-1",
+        "fallbacks": [
+          "zen/zai/glm-4.7"
+        ]
+      },
+      "models": {
+        "zen/x-ai/grok-code-fast-1": { "alias": "grokcode" },
+        "zen/x-ai/grok-4.1-fast": { "alias": "grok" },
+        "zen/zai/glm-4.7": { "alias": "glm4" },
+        "zen/anthropic/claude-sonnet-4-5": { "alias": "sonnet" },
+        "zen/anthropic/claude-opus-4-5": { "alias": "opus" },
+        "zen/google/gemini-2.5-flash-lite": { "alias": "flash" },
+        "zen/deepseek/deepseek-chat": { "alias": "ds" }
+      },
+      "heartbeat": {
+        "every": "2h",
+        "model": "zen/zai/glm-4.7",
+        "target": "last"
+      },
+      "subagents": {
+        "model": "zen/x-ai/grok-code-fast-1",
+        "maxConcurrent": 1,
+        "archiveAfterMinutes": 60
+      },
+      "imageModel": {
+        "primary": "zen/x-ai/grok-code-fast-1",
+        "fallbacks": ["zen/zai/glm-4.7"]
+      },
+      "contextTokens": 131072
+    }
+  },
+  "channels": {
+    "telegram": { "enabled": true, "dmPolicy": "pairing" }
+  }
+}

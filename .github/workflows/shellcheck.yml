@@ -1,0 +1,28 @@
+name: Lint Bash Scripts
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - '**.sh'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - '**.sh'
+
+jobs:
+  shellcheck:
+    name: Run ShellCheck
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          severity: warning
+          check_together: 'yes'
+        env:
+          SHELLCHECK_OPTS: --exclude=SC1090,SC1091
