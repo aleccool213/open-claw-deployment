@@ -802,40 +802,34 @@ curl -s https://api.notion.com/v1/users/me \
 # 4. Email
 himalaya folder list 2>/dev/null | head -3 && echo "Email: OK" || echo "Email: FAIL"
 
-# 5. OpenRouter
-curl -s https://openrouter.ai/api/v1/models \
-  -H "Authorization: Bearer $OPENROUTER_API_KEY" | jq '.data | length' && echo "OpenRouter: OK"
+# 5. OpenCode Zen
+curl -s https://opencode.ai/zen/v1/models \
+  -H "Authorization: Bearer $OPENCODE_ZEN_API_KEY" | jq '.data | length' && echo "OpenCode Zen: OK"
 ```
 
 ---
 
-## Phase 5 — OpenRouter & Model Routing (~15 min)
+## Phase 5 — OpenCode Zen & Model Routing (~15 min)
 
-### 5A. OpenRouter Setup
+### 5A. OpenCode Zen Setup
 
-**Goal:** Use OpenRouter as a unified gateway so you can run Kimi K2.5 as the daily driver with Grok and Claude available when needed.
+**Goal:** Use OpenCode Zen as the model provider — cheaper than alternatives with free tier models available during beta.
 
-OpenRouter charges a 5.5% platform fee on credit purchases but gives you one API key for 300+ models. OpenClaw has built-in OpenRouter support — no custom provider config needed.
+OpenCode Zen provides curated, tested models optimized for coding agents. During beta, several models are free including Grok Code Fast 1 and GLM 4.7.
 
 **1. Get your API key:**
 
-- Sign up at [openrouter.ai](https://openrouter.ai/)
-- Go to [openrouter.ai/keys](https://openrouter.ai/keys) → Create key
-- Copy it (starts with `sk-or-...`)
-- Add credits — even $10 goes a long way with Kimi pricing
+- Sign up at [opencode.ai/zen](https://opencode.ai/zen)
+- Add $20 balance to your account
+- Copy your API key (starts with `ocz_...`)
+- Auto-top-up at $5 when balance runs low
 
 **2. Add key to VPS `.env`:**
 
 ```bash
 ssh oc
-echo 'OPENROUTER_API_KEY=sk-or-...' >> /home/deploy/.openclaw/.env
+echo 'OPENCODE_ZEN_API_KEY=ocz_...' >> /home/deploy/.openclaw/.env
 chmod 600 /home/deploy/.openclaw/.env
-```
-
-**3. Or onboard via CLI (alternative to manual config):**
-
-```bash
-openclaw onboard --auth-choice apiKey --token-provider openrouter --token "$OPENROUTER_API_KEY"
 ```
 
 ---
@@ -849,49 +843,47 @@ Edit `~/.openclaw/openclaw.json` (or `/home/deploy/.openclaw/openclaw.json` on V
 ```jsonc
 {
   "env": {
-    "OPENROUTER_API_KEY": "sk-or-..."
+    "OPENCODE_ZEN_API_KEY": "ocz_..."
   },
   "agents": {
     "defaults": {
-      // Primary model with fallback chain
+      // Primary model with fallback chain (using FREE models)
       "model": {
-        "primary": "openrouter/moonshotai/kimi-k2.5",
+        "primary": "zen/x-ai/grok-code-fast-1",
         "fallbacks": [
-          "openrouter/x-ai/grok-4.1-fast",
-          "openrouter/anthropic/claude-sonnet-4-5"
+          "zen/zai/glm-4.7"
         ]
       },
 
       // Named models for quick /model switching
       "models": {
-        "openrouter/moonshotai/kimi-k2.5":          { "alias": "kimi" },
-        "openrouter/x-ai/grok-4.1-fast":            { "alias": "grok" },
-        "openrouter/x-ai/grok-4":                   { "alias": "grok4" },
-        "openrouter/x-ai/grok-code-fast-1":         { "alias": "grokcode" },
-        "openrouter/anthropic/claude-sonnet-4-5":    { "alias": "sonnet" },
-        "openrouter/anthropic/claude-opus-4-5":      { "alias": "opus" },
-        "openrouter/google/gemini-2.5-flash-lite":   { "alias": "flash" },
-        "openrouter/deepseek/deepseek-chat":         { "alias": "ds" }
+        "zen/x-ai/grok-code-fast-1":  { "alias": "grokcode" },
+        "zen/x-ai/grok-4.1-fast":      { "alias": "grok" },
+        "zen/zai/glm-4.7":             { "alias": "glm4" },
+        "zen/anthropic/claude-sonnet-4-5": { "alias": "sonnet" },
+        "zen/anthropic/claude-opus-4-5":   { "alias": "opus" },
+        "zen/google/gemini-2.5-flash-lite": { "alias": "flash" },
+        "zen/deepseek/deepseek-chat":   { "alias": "ds" }
       },
 
-      // Cheap model for heartbeats (every 30 min background check-ins)
+      // Free model for heartbeats (every 2 hours)
       "heartbeat": {
-        "every": "30m",
-        "model": "openrouter/google/gemini-2.5-flash-lite",
+        "every": "2h",
+        "model": "zen/zai/glm-4.7",
         "target": "last"
       },
 
-      // Sub-agents use mid-tier model
+      // Sub-agents use free model
       "subagents": {
-        "model": "openrouter/x-ai/grok-4-fast",
+        "model": "zen/x-ai/grok-code-fast-1",
         "maxConcurrent": 1,
         "archiveAfterMinutes": 60
       },
 
       // Vision tasks
       "imageModel": {
-        "primary": "openrouter/moonshotai/kimi-k2.5",
-        "fallbacks": ["openrouter/x-ai/grok-4-fast"]
+        "primary": "zen/x-ai/grok-code-fast-1",
+        "fallbacks": ["zen/zai/glm-4.7"]
       },
 
       "contextTokens": 131072
@@ -904,18 +896,17 @@ Edit `~/.openclaw/openclaw.json` (or `/home/deploy/.openclaw/openclaw.json` on V
 
 ### 5C. Model Slugs Quick Reference
 
-| Alias | Model Slug | $/M tokens (in+out) | Best for |
-|-------|-----------|---------------------|----------|
-| `kimi` | `openrouter/moonshotai/kimi-k2.5` | ~$1.10 | Daily driver, multimodal, coding |
-| `grok` | `openrouter/x-ai/grok-4.1-fast` | ~$0.70 | Tool calling, agentic tasks, 2M context |
-| `grokcode` | `openrouter/x-ai/grok-code-fast-1` | ~$0.70 | Agentic coding with reasoning traces |
-| `grok4` | `openrouter/x-ai/grok-4` | ~$18.00 | Heavy reasoning (use sparingly) |
-| `sonnet` | `openrouter/anthropic/claude-sonnet-4-5` | ~$18.00 | Complex analysis, writing |
-| `opus` | `openrouter/anthropic/claude-opus-4-5` | ~$30.00 | Hardest problems only |
-| `flash` | `openrouter/google/gemini-2.5-flash-lite` | ~$0.50 | Heartbeats, simple lookups |
-| `ds` | `openrouter/deepseek/deepseek-chat` | ~$0.53 | Cheap fallback, classification |
+| Alias | Model Slug | Cost | Best for |
+|-------|-----------|------|----------|
+| `grokcode` | `zen/x-ai/grok-code-fast-1` | **FREE** (beta) | Daily driver, coding, default |
+| `glm4` | `zen/zai/glm-4.7` | **FREE** (beta) | Fallback, heartbeats |
+| `grok` | `zen/x-ai/grok-4.1-fast` | ~$0.70/M | Tool calling, agentic tasks |
+| `sonnet` | `zen/anthropic/claude-sonnet-4-5` | ~$18.00/M | Complex analysis, writing |
+| `opus` | `zen/anthropic/claude-opus-4-5` | ~$30.00/M | Hardest problems only |
+| `flash` | `zen/google/gemini-2.5-flash-lite` | ~$0.50/M | Simple lookups |
+| `ds` | `zen/deepseek/deepseek-chat` | ~$0.53/M | Cheap fallback |
 
-**Cost logic:** Kimi K2.5 is very cheap for its capability. Grok 4.1 Fast and Grok Code Fast are aggressively priced at $0.20/$0.50 per M tokens. Reserve Claude/Grok 4 full for tasks that genuinely need frontier reasoning.
+**Cost logic:** Use free models (grokcode, glm4) for 90% of tasks. Only upgrade to paid models (sonnet, opus) for tasks that genuinely need frontier reasoning.
 
 ---
 
@@ -954,22 +945,22 @@ The alias names come from your config. Switch as needed — it applies to the cu
 | Moderate (30 queries/day) | ~$150/mo | ~$40/mo |
 | Heavy (100 queries/day) | ~$500/mo | ~$100/mo |
 
-**Free tier warning:** Kimi K2.5 and some models have free tiers on OpenRouter, but they have aggressive rate limits and can stall mid-task. Paid tiers are pennies per query and reliable 24/7. Worth it for a production agent.
+**Note:** Free models (Grok Code Fast 1, GLM 4.7) are available during OpenCode Zen beta. These are reliable for production use. Paid models are available if you need additional capabilities.
 
 ---
 
-### 5F. Verify OpenRouter is Working
+### 5F. Verify OpenCode Zen is Working
 
 ```bash
 ssh oc
 cd /home/deploy/.openclaw
 
 # Quick API test
-curl -s https://openrouter.ai/api/v1/chat/completions \
-  -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+curl -s https://opencode.ai/zen/v1/chat/completions \
+  -H "Authorization: Bearer $OPENCODE_ZEN_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "moonshotai/kimi-k2.5",
+    "model": "x-ai/grok-code-fast-1",
     "messages": [{"role": "user", "content": "Say hello in 5 words"}]
   }' | jq '.choices[0].message.content'
 

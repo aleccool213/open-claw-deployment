@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository contains deployment scripts for running [OpenClaw](https://github.com/openclaw/openclaw) — an AI agent gateway — on a Hetzner VPS (~$5/month). Uses **OpenCode Zen** as the model provider (cheaper than OpenRouter with free tier options).
+This repository contains deployment scripts for running [OpenClaw](https://github.com/openclaw/openclaw) — an AI agent gateway — on a Hetzner VPS (~$5/month). Uses **OpenCode Zen** as the model provider (free tier available).
 
 ### What are Heartbeats?
 
@@ -77,7 +77,7 @@ NOTION_API_KEY=ntn_...
 
 ### OpenClaw Config (openclaw.json)
 Located at `/home/deploy/.openclaw/openclaw.json`:
-- **Provider**: OpenCode Zen (cheaper than OpenRouter, free tier available)
+- **Provider**: OpenCode Zen (free tier available)
 - Primary model: Grok Code Fast 1 (FREE during beta) or GLM 4.7 (FREE)
 - Heartbeat: Every **2 hours** (reduced from 30min to save costs)
 - Model aliases: `grok`, `glm4`, `grokcode`, `flash`, `ds`
@@ -89,7 +89,6 @@ Located at `/home/deploy/.openclaw/openclaw.json`:
 - **FREE models** (during beta): Grok Code Fast 1, GLM 4.7, MiniMax M2.1, Big Pickle
 - Curated models optimized for coding agents
 - Pay-as-you-go: $20 minimum, auto-top-up at $5
-- No platform fees (vs OpenRouter's 5.5%)
 - Get API key from dashboard and add to `.env`:
   ```bash
   OPENCODE_ZEN_API_KEY=ocz_...
@@ -216,8 +215,6 @@ tar -xzf /var/backups/openclaw/openclaw-YYYY-MM-DD-HHMMSS.tar.gz -C /
 | Light (10 queries/day) | **$0-5** | Free models sufficient |
 | Moderate (30 queries/day) | **$5-15** | Mix of free + paid models |
 | Heavy (100 queries/day) | **$15-30** | Mostly paid models |
-
-**Cost savings vs OpenRouter**: ~70-80% reduction
 
 VPS: ~$5/month (Hetzner cx22)
 

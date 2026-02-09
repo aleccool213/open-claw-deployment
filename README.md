@@ -35,16 +35,16 @@ ssh -N -L 18789:127.0.0.1:18789 deploy@$(hcloud server ip openclaw)
 
 ### Cost Optimization
 
-| Component | Original (OpenRouter) | This Setup (OpenCode Zen) |
-|-----------|----------------------|---------------------------|
-| **Model Provider** | ~$15-100/month | **$0-15/month** |
-| **VPS** | $5/month | $5/month |
-| **Total** | $20-105/month | **$5-20/month** |
+| Component | Cost |
+|-----------|------|
+| **Model Provider** (OpenCode Zen) | **$0-15/month** |
+| **VPS** (Hetzner cx22) | $5/month |
+| **Total** | **$5-20/month** |
 
-Savings achieved by:
+Cost savings achieved by:
 - Using OpenCode Zen (free models during beta: Grok Code Fast 1, GLM 4.7)
 - Reducing heartbeat frequency from 30min to 2h (75% fewer API calls)
-- No platform fees (vs OpenRouter's 5.5%)
+- No platform fees
 
 ### Security-First Design
 
