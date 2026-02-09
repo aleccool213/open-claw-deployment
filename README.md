@@ -1,0 +1,133 @@
+# OpenClaw Hetzner Deployment
+
+Deploy [OpenClaw](https://github.com/openclaw/openclaw) — an AI agent gateway — on a $5/month Hetzner VPS with sensible defaults and cost-optimized configuration.
+
+## What This Does
+
+This repo provides automated scripts to:
+
+1. **Provision a secure VPS** on Hetzner Cloud with hardened SSH, firewall, and fail2ban
+2. **Deploy OpenClaw Gateway** as a Docker container with persistent state
+3. **Configure integrations** using free/cheap AI models via OpenCode Zen
+4. **Set up secure secret management** with 1Password integration
+5. **Enable notifications** via Telegram bot and email (Himalaya CLI)
+
+## Quick Start
+
+```bash
+# 1. Provision VPS (install hcloud CLI first)
+hcloud server create --name openclaw --type cx22 --image ubuntu-24.04 \
+  --location fsn1 --ssh-key your-key
+
+# 2. Bootstrap the server (run as root)
+ssh root@$(hcloud server ip openclaw) 'bash -s' < oc-bootstrap.sh
+
+# 3. Configure integrations (run as deploy user)
+ssh deploy@$(hcloud server ip openclaw) 'bash -s' < oc-configure.sh
+
+# 4. Open SSH tunnel to access gateway
+ssh -N -L 18789:127.0.0.1:18789 deploy@$(hcloud server ip openclaw)
+
+# 5. Access OpenClaw at http://localhost:18789
+```
+
+## Why This Setup?
+
+### Cost Optimization
+
+| Component | Original (OpenRouter) | This Setup (OpenCode Zen) |
+|-----------|----------------------|---------------------------|
+| **Model Provider** | ~$15-100/month | **$0-15/month** |
+| **VPS** | $5/month | $5/month |
+| **Total** | $20-105/month | **$5-20/month** |
+
+Savings achieved by:
+- Using OpenCode Zen (free models during beta: Grok Code Fast 1, GLM 4.7)
+- Reducing heartbeat frequency from 30min to 2h (75% fewer API calls)
+- No platform fees (vs OpenRouter's 5.5%)
+
+### Security-First Design
+
+- **SSH hardening**: Key-only auth, root disabled, fail2ban monitoring
+- **Network isolation**: Gateway only accessible via SSH tunnel (port 18789 bound to localhost)
+- **Secret management**: All credentials stored in 1Password, never in plaintext
+- **Automatic backups**: Daily encrypted backups of all state
+- **Security updates**: Unattended-upgrades enabled
+
+## Architecture
+
+```
+┌─────────────────┐
+│   Your Laptop   │
+│  (SSH tunnel)   │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐     ┌─────────────────┐
+│  Hetzner VPS    │────▶│  1Password      │
+│  Ubuntu 24.04   │     │  (secrets)      │
+│  - Docker       │     └─────────────────┘
+│  - UFW firewall │
+│  - fail2ban     │     ┌─────────────────┐
+└────────┬────────┘────▶│  OpenCode Zen   │
+         │              │  (AI models)    │
+         ▼              └─────────────────┘
+┌─────────────────┐
+│ OpenClaw Gateway│     ┌─────────────────┐
+│  - Telegram bot │────▶│  Telegram API   │
+│  - Email (SMTP) │     └─────────────────┘
+│  - Notion API   │
+└─────────────────┘     ┌─────────────────┐
+                        │  Gmail/Fastmail │
+                        │  (IMAP/SMTP)    │
+                        └─────────────────┘
+```
+
+## Required Integrations
+
+Scripts will prompt for these required credentials:
+
+1. **OpenCode Zen API key** — Model provider (free tier available)
+2. **Telegram bot token** — Chat interface (@BotFather)
+3. **1Password service account** — Secure secret storage
+4. **Email account** — Gmail/Fastmail with app password
+
+## Optional Integrations
+
+5. **Notion API key** — Document management (can skip)
+
+## Repository Structure
+
+```
+.
+├── oc-bootstrap.sh           # Run once as root on fresh VPS
+├── oc-configure.sh           # Run as deploy user for integrations
+├── openclaw.json.example     # Gateway configuration template
+├── lint-scripts.sh           # ShellCheck linting
+├── AGENTS.md                 # Detailed documentation
+└── .github/workflows/        # CI/CD for script validation
+```
+
+## Development
+
+```bash
+# Validate bash scripts
+./lint-scripts.sh
+
+# Run tests locally
+shellcheck oc-bootstrap.sh oc-configure.sh
+```
+
+## Documentation
+
+- [AGENTS.md](AGENTS.md) — Complete deployment guide, cost breakdown, troubleshooting
+- [openclaw-hetzner-checklist.md](openclaw-hetzner-checklist.md) — Step-by-step terminal checklist
+- [OpenClaw Docs](https://docs.openclaw.ai) — Official OpenClaw documentation
+
+## License
+
+MIT — See repository for details.
+
+---
+
+**Note**: This is a deployment template. Review and customize scripts for your specific security requirements before production use.
