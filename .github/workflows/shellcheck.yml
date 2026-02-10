@@ -90,12 +90,14 @@ jobs:
       
       - name: Check for common issues
         run: |
+          set -euo pipefail
+
           # Check for hardcoded secrets (basic patterns)
           if grep -r "password.*=" oc-*.sh | grep -v "read.*password\|PASSWORD.*read\|example\|# " | head -5; then
             echo "⚠️  Warning: Possible hardcoded password detected"
             exit 1
           fi
-          
+
           # Check for TODO/FIXME markers
           if grep -rn "TODO\|FIXME\|XXX" oc-*.sh | grep -v "# TODO:\|# FIXME:\|Check for TODO"; then
             echo "⚠️  Warning: Found TODO/FIXME markers"
