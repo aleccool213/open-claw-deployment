@@ -60,7 +60,7 @@ fi
 
 step "Running Syntax Checks"
 
-for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh lint-scripts.sh; do
+for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh oc-load-secrets.sh lint-scripts.sh; do
     if bash -n "$script" 2>&1; then
         ok "$script syntax is valid"
     else
@@ -72,7 +72,7 @@ done
 
 step "Checking Executable Permissions"
 
-for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh lint-scripts.sh; do
+for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh oc-load-secrets.sh lint-scripts.sh; do
     if [ -x "$script" ]; then
         ok "$script is executable"
     else
@@ -86,7 +86,7 @@ done
 step "Running Integration Checks"
 
 # Check shebangs
-for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh lint-scripts.sh; do
+for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh oc-load-secrets.sh lint-scripts.sh; do
     if head -1 "$script" | grep -q "^#!/usr/bin/env bash"; then
         ok "$script has correct shebang"
     else
@@ -95,7 +95,7 @@ for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh lint-scripts.sh; d
 done
 
 # Check for set -euo pipefail
-for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh lint-scripts.sh; do
+for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh oc-load-secrets.sh lint-scripts.sh; do
     if grep -q "set -euo pipefail" "$script"; then
         ok "$script has set -euo pipefail"
     else
