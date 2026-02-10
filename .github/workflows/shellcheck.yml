@@ -44,6 +44,7 @@ jobs:
           bash -n oc-provision.sh
           bash -n oc-bootstrap.sh
           bash -n oc-configure.sh
+          bash -n oc-load-secrets.sh
           bash -n lint-scripts.sh
           echo "✅ All scripts have valid syntax"
 
@@ -60,6 +61,7 @@ jobs:
           test -x oc-provision.sh || (echo "❌ oc-provision.sh is not executable" && exit 1)
           test -x oc-bootstrap.sh || (echo "❌ oc-bootstrap.sh is not executable" && exit 1)
           test -x oc-configure.sh || (echo "❌ oc-configure.sh is not executable" && exit 1)
+          test -x oc-load-secrets.sh || (echo "❌ oc-load-secrets.sh is not executable" && exit 1)
           test -x lint-scripts.sh || (echo "❌ lint-scripts.sh is not executable" && exit 1)
           echo "✅ All scripts are executable"
 
