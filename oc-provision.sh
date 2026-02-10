@@ -72,7 +72,7 @@ if [[ -f "${LOCAL_KEY_PATH}" ]]; then
   ok "Found local SSH key: ${LOCAL_KEY_PATH}"
 else
   echo ""
-  echo "  Creating new SSH key: ${LOCAL_KEY_NAME}"
+  echo "  Creating new SSH key: ${SSH_KEY_NAME}"
   echo ""
   
   # Ensure .ssh directory exists
@@ -90,9 +90,10 @@ fi
 if hcloud ssh-key describe "$SSH_KEY_NAME" >/dev/null 2>&1; then
   ok "SSH key '${SSH_KEY_NAME}' already exists in Hetzner"
   
-  # Verify fingerprint matches
-  LOCAL_FINGERPRINT=$(ssh-keygen -lf "${LOCAL_KEY_PATH}.pub" | awk '{print $2}')
-  REMOTE_FINGERPRINT=$(hcloud ssh-key describe "$SSH_KEY_NAME" -o format='{{.Fingerprint}}')
+    # Verify fingerprint matches
+    LOCAL_FINGERPRINT=$(ssh-keygen -E md5 -lf "${LOCAL_KEY_PATH}.pub" | awk '{print $2}' | sed 's/MD5://')
+    REMOTE_FINGERPRINT=$(hcloud ssh-key describe "$SSH_KEY_NAME" -o format='{{.Fingerprint}}')
+
   
   if [[ "$LOCAL_FINGERPRINT" == "$REMOTE_FINGERPRINT" ]]; then
     ok "Local and remote SSH key fingerprints match"
@@ -117,7 +118,7 @@ fi
 step "Creating VPS"
 
 SERVER_NAME="openclaw"
-SERVER_TYPE="cx22"
+SERVER_TYPE="cx23"
 SERVER_IMAGE="ubuntu-24.04"
 SERVER_LOCATION="fsn1"
 
@@ -168,7 +169,6 @@ hcloud server create \
   --location "$SERVER_LOCATION" \
   --ssh-key "$SSH_KEY_NAME" \
   --label "app=openclaw" \
-  --wait
 
 SERVER_IP=$(hcloud server ip "$SERVER_NAME")
 
