@@ -32,6 +32,37 @@ Heartbeats are periodic check-ins OpenClaw does to maintain context and keep the
 └── oc-scripts.zip               # Original archive (extracted above)
 ```
 
+## Development Guidelines
+
+### Testing Requirements
+
+**⚠️ CRITICAL RULE**: Never push changes to the repository unless all tests pass locally.
+
+Before pushing any changes:
+
+1. **Run all tests**:
+   ```bash
+   bats tests/*.bats
+   ```
+
+2. **Run integration checks**:
+   ```bash
+   # Check for hardcoded secrets
+   # Check for TODO/FIXME markers
+   # Verify shebangs and pipefail settings
+   ./lint-scripts.sh
+   ```
+
+3. **Verify syntax**:
+   ```bash
+   bash -n oc-provision.sh
+   bash -n oc-bootstrap.sh
+   bash -n oc-configure.sh
+   bash -n lint-scripts.sh
+   ```
+
+All 25 Bats tests must pass, and all integration checks must succeed before committing and pushing code. This ensures CI/CD pipelines remain green and deployments stay reliable.
+
 ## Deployment Architecture
 
 ### Network Security
