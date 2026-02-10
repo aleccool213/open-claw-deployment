@@ -118,7 +118,7 @@ fi
 step "Creating VPS"
 
 SERVER_NAME="openclaw"
-SERVER_TYPE="cx23"
+SERVER_TYPE="cx22"
 SERVER_IMAGE="ubuntu-24.04"
 SERVER_LOCATION="fsn1"
 
