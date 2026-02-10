@@ -24,8 +24,8 @@ verify() {
 
 pause_confirm() {
   echo -e "\n${YELLOW}⏸  $1${NC}"
-  echo -e "   Press Enter to continue, or Ctrl-C to abort..."
-  read -r
+  echo -e "   Non-interactive mode: continuing in 5 seconds..."
+  sleep 5
 }
 
 # ── Preflight ────────────────────────────────────────────────────────────────
@@ -143,7 +143,29 @@ verify "Data dir writable by node user" "test -d ${OPENCLAW_DATA}/workspace"
 
 step "4/9 — Building & launching gateway"
 cd "$OPENCLAW_DIR"
-docker compose build
+
+# Check if we should pull or build
+if [[ "$OPENCLAW_IMAGE" == "openclaw:latest" ]]; then
+  echo "  Image set to local build (openclaw:latest)."
+  # Only build if it doesn't exist locally to save time
+  if [[ "$(docker images -q openclaw:latest 2> /dev/null)" == "" ]]; then
+    echo "  Building image locally with BuildKit caching..."
+    export DOCKER_BUILDKIT=1
+    docker build \
+      --build-arg BUILDKIT_INLINE_CACHE=1 \
+      --cache-from openclaw:latest \
+      -t openclaw:latest .
+  else
+    ok "Image openclaw:latest already exists, skipping build"
+    info "To force a rebuild, run: docker rmi openclaw:latest"
+  fi
+else
+  echo "  Custom image detected: $OPENCLAW_IMAGE"
+  echo "  Pulling image..."
+  docker pull "$OPENCLAW_IMAGE"
+  ok "Image pulled successfully"
+fi
+
 docker compose up -d openclaw-gateway
 sleep 5
 
