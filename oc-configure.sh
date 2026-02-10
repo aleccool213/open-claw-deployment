@@ -74,9 +74,10 @@ echo "  │    1. OpenCode Zen (model provider)          │"
 echo "  │    2. Telegram bot (chat interface)          │"
 echo "  │    3. 1Password CLI (secret management)      │"
 echo "  │    4. Email (Himalaya CLI)                   │"
+echo "  │    5. Tailscale (secure network access)      │"
 echo "  │                                              │"
 echo "  │  OPTIONAL:                                   │"
-echo "  │    5. Notion API (document management)       │"
+echo "  │    6. Notion API (document management)       │"
 echo "  └──────────────────────────────────────────────┘"
 echo -e "${NC}"
 
@@ -84,7 +85,7 @@ echo -e "${NC}"
 # 1. OPENCODE ZEN (Recommended - Cheaper than OpenCode Zen, free tier available)
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "1/5 — OpenCode Zen API Key"
+step "1/6 — OpenCode Zen API Key"
 info "Sign up at: https://opencode.ai/zen"
   info "Free models during beta: Grok Code Fast 1, GLM 4.7, MiniMax M2.1"
 
@@ -114,7 +115,7 @@ fi
 # 2. TELEGRAM (REQUIRED)
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "2/5 — Telegram Bot Token (REQUIRED)"
+step "2/6 — Telegram Bot Token (REQUIRED)"
 info "Create a bot: open Telegram → @BotFather → /newbot"
 info "Copy the HTTP API token it gives you"
 
@@ -140,7 +141,7 @@ fi
 # 3. 1PASSWORD CLI (SERVICE ACCOUNT) - REQUIRED
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "3/5 — 1Password CLI (REQUIRED)"
+step "3/6 — 1Password CLI (REQUIRED)"
 info "Requires a Service Account token from 1password.com"
 info "Create at: 1password.com → Developer → Service Accounts"
 info "Grant access to your 'OpenClaw' vault"
@@ -180,7 +181,7 @@ fi
 # 4. EMAIL (HIMALAYA) - REQUIRED
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "4/5 — Email (Himalaya CLI) (REQUIRED)"
+step "4/6 — Email (Himalaya CLI) (REQUIRED)"
 info "Himalaya is a terminal email client for IMAP/SMTP"
 info "You'll need: Gmail/Fastmail account with App Password"
 
@@ -286,10 +287,82 @@ else
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 5. NOTION (OPTIONAL)
+# 5. TAILSCALE (REQUIRED)
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "5/5 — Notion API (OPTIONAL)"
+step "5/6 — Tailscale (REQUIRED for secure access)"
+info "Tailscale provides secure zero-trust network access to your OpenClaw gateway"
+info "No need to expose ports or manage SSH tunnels"
+
+# Check if tailscale is installed (should have been installed in bootstrap)
+if ! command -v tailscale &>/dev/null; then
+  echo "  Installing Tailscale..."
+  curl -fsSL https://tailscale.com/install.sh | sh
+  verify "Tailscale installed" "command -v tailscale"
+else
+  ok "Tailscale already installed ($(tailscale version | head -1))"
+fi
+
+# Check if already authenticated
+if sudo tailscale status >/dev/null 2>&1; then
+  TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "unknown")
+  TAILSCALE_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // "unknown"' 2>/dev/null || echo "unknown")
+
+  ok "Tailscale already connected"
+  info "Tailscale IP:       ${TAILSCALE_IP}"
+  info "Tailscale hostname: ${TAILSCALE_HOSTNAME}"
+else
+  echo ""
+  warn "Tailscale not connected yet"
+  info "Run: sudo tailscale up"
+  info "This will print an authentication URL — open it in your browser to authorize"
+  echo ""
+
+  # Prompt to connect now
+  echo -n "  Connect to Tailscale now? [Y/n]: "
+  read -r CONNECT_NOW
+
+  if [[ "$CONNECT_NOW" =~ ^[Nn]$ ]]; then
+    fail "Tailscale connection is REQUIRED — run 'sudo tailscale up' manually"
+  else
+    echo ""
+    info "Starting Tailscale connection..."
+    sudo tailscale up
+
+    TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "unknown")
+    TAILSCALE_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // "unknown"' 2>/dev/null || echo "unknown")
+
+    ok "Tailscale connected!"
+    info "Tailscale IP:       ${TAILSCALE_IP}"
+    info "Tailscale hostname: ${TAILSCALE_HOSTNAME}"
+  fi
+fi
+
+# Set up Tailscale serve to proxy the gateway
+echo ""
+info "Configuring Tailscale to proxy OpenClaw gateway..."
+info "This allows access from any device on your Tailnet at port 18789"
+
+# Check if serve is already configured
+if sudo tailscale serve status 2>/dev/null | grep -q "18789"; then
+  ok "Tailscale serve already configured"
+else
+  sudo tailscale serve --bg --https=443 http://127.0.0.1:18789
+  ok "Tailscale serve configured: https://${TAILSCALE_HOSTNAME:-<hostname>}"
+fi
+
+# Verify Tailscale is working
+if tailscale status >/dev/null 2>&1; then
+  ok "Tailscale verification passed"
+else
+  fail "Tailscale not running properly"
+fi
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 6. NOTION (OPTIONAL)
+# ═════════════════════════════════════════════════════════════════════════════
+
+step "6/6 — Notion API (OPTIONAL)"
 info "Create an integration at: https://notion.so/my-integrations"
 info "Then share your target pages with the integration"
 info "Press Enter to skip if you don't use Notion"
@@ -406,6 +479,10 @@ printf "  %-20s ${GREEN}%s${NC}\n" "1Password" "✅ Connected"
 # Email (required)
 printf "  %-20s ${GREEN}%s${NC}\n" "Email" "✅ Himalaya configured"
 
+# Tailscale (required)
+TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "not connected")
+printf "  %-20s ${GREEN}%s${NC}\n" "Tailscale" "✅ Connected (${TAILSCALE_IP})"
+
 # Notion (optional)
 if [[ -n "${NOTION_API_KEY:-}" ]]; then
   printf "  %-20s ${GREEN}%s${NC}\n" "Notion" "✅ Connected as ${NOTION_USER:-unknown}"
@@ -424,6 +501,11 @@ echo "    Telegram pairing (REQUIRED):"
 echo "      1. Open Telegram → send /start to your bot @${BOT_NAME}"
 echo "      2. Copy the pairing code"
 echo "      3. Run: docker compose run --rm openclaw-cli pairing approve telegram <CODE>"
+echo ""
+echo "    Access OpenClaw Gateway:"
+TAILSCALE_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // "unknown"' 2>/dev/null || echo "unknown")
+echo "      Tailscale: https://${TAILSCALE_HOSTNAME} (from any device on your Tailnet)"
+echo "      Local:     ssh -N -L 18789:127.0.0.1:18789 deploy@<VPS_IP> then http://localhost:18789"
 echo ""
 echo "    Switch models from chat:"
 echo "      /model grokcode — Grok Code Fast 1 (FREE, default)"
