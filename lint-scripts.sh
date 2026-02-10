@@ -21,7 +21,8 @@ shellcheck \
     --exclude=SC1090,SC1091 \
     --severity=warning \
     oc-bootstrap.sh \
-    oc-configure.sh
+    oc-configure.sh \
+    oc-provision.sh
 
 echo ""
 echo "✅ All scripts passed ShellCheck!"
