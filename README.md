@@ -152,7 +152,9 @@ source ./oc-load-secrets.sh
 ├── oc-configure.sh           # Run as deploy user for integrations
 ├── oc-load-secrets.sh        # (Optional) Load secrets from 1Password CLI
 ├── openclaw.json.example     # Gateway configuration template
-├── lint-scripts.sh           # ShellCheck linting
+├── run-tests.sh              # Consolidated test suite (all tests)
+├── lint-scripts.sh           # ShellCheck linting only
+├── tests/                    # Bats test suite
 ├── AGENTS.md                 # Detailed documentation
 └── .github/workflows/        # CI/CD for script validation
 ```
@@ -160,12 +162,16 @@ source ./oc-load-secrets.sh
 ## Development
 
 ```bash
-# Validate bash scripts
-./lint-scripts.sh
+# Run all tests locally (ShellCheck, syntax, permissions, integration, Bats)
+./run-tests.sh
 
-# Run tests locally
-shellcheck oc-bootstrap.sh oc-configure.sh
+# Or run individual test categories:
+./lint-scripts.sh                    # Just ShellCheck linting
+bash -n oc-bootstrap.sh              # Just syntax validation
+bats tests/*.bats                    # Just Bats tests
 ```
+
+The `run-tests.sh` script runs the complete test suite that matches GitHub Actions CI/CD, ensuring your changes will pass all automated checks.
 
 ## Documentation
 
