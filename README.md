@@ -91,10 +91,26 @@ Scripts will prompt for these required credentials:
 2. **Telegram bot token** — Chat interface (@BotFather)
 3. **1Password service account** — Secure secret storage
 4. **Email account** — Gmail/Fastmail with app password
+5. **Tailscale account** — Secure network access (see authentication options below)
+
+### Tailscale Authentication
+
+You have two options for authenticating with Tailscale:
+
+**Option 1: Browser Flow (Default)**
+- The script runs `sudo tailscale up` and provides a URL
+- Open the URL in your browser and approve the device
+- Simple and works for manual deployments
+
+**Option 2: Auth Key (Automated)**
+- Generate a reusable auth key at: https://login.tailscale.com/admin/settings/keys
+- Provide it during configuration when prompted
+- Ideal for automated deployments or avoiding browser steps
+- Auth key format: `tskey-auth-xxxxx`
 
 ## Optional Integrations
 
-5. **Notion API key** — Document management (can skip)
+6. **Notion API key** — Document management (can skip)
 
 ## Repository Structure
 
