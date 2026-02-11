@@ -22,7 +22,10 @@ hcloud server create --name openclaw --type cx22 --image ubuntu-24.04 \
 # 2. Bootstrap the server (run as root)
 ssh root@$(hcloud server ip openclaw) 'bash -s' < oc-bootstrap.sh
 
-# 3. Configure integrations (run as deploy user)
+# 3a. (Optional) Load secrets from 1Password
+source ./oc-load-secrets.sh  # Pre-load secrets to skip manual entry
+
+# 3b. Configure integrations (run as deploy user)
 ssh deploy@$(hcloud server ip openclaw) 'bash -s' < oc-configure.sh
 
 # 4. Open SSH tunnel to access gateway
@@ -112,12 +115,45 @@ You have two options for authenticating with Tailscale:
 
 6. **Notion API key** — Document management (can skip)
 
+## 1Password Integration (Optional but Recommended)
+
+For faster setup and centralized secret management, you can use the `oc-load-secrets.sh` script to fetch credentials from 1Password CLI:
+
+### Setup
+
+1. **Create a 1Password vault** named `OpenClaw` (or use `OP_VAULT` env var for custom name)
+2. **Add these items to the vault:**
+   - "OpenCode Zen API Key" (field: credential)
+   - "Telegram Bot Token" (field: credential)
+   - "1Password Service Account" (field: credential)
+   - "Notion API Key" (field: credential) — optional
+   - "Email App Password" (field: password) — used by Himalaya at runtime
+3. **Install 1Password CLI**: https://developer.1password.com/docs/cli/get-started/
+4. **Authenticate**: `op signin` or export `OP_SERVICE_ACCOUNT_TOKEN`
+
+### Usage
+
+```bash
+# Load secrets from 1Password before configuring
+source ./oc-load-secrets.sh
+
+# Now run configure - it will use the pre-loaded secrets
+./oc-configure.sh
+```
+
+**Benefits:**
+- Skip manual secret entry during configuration
+- Centralized secret storage and rotation
+- Audit trail of secret access
+- Share secrets securely with team members
+
 ## Repository Structure
 
 ```
 .
 ├── oc-bootstrap.sh           # Run once as root on fresh VPS
 ├── oc-configure.sh           # Run as deploy user for integrations
+├── oc-load-secrets.sh        # (Optional) Load secrets from 1Password CLI
 ├── openclaw.json.example     # Gateway configuration template
 ├── lint-scripts.sh           # ShellCheck linting
 ├── AGENTS.md                 # Detailed documentation
