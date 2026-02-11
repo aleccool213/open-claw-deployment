@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
-# run-tests.sh - Run all tests locally
+# run-tests.sh - Consolidated test script for OpenClaw deployment
+#
+# This script runs ALL tests that are executed in GitHub Actions CI/CD.
+# Use this script to run the complete test suite locally before pushing.
+#
+# Tests included:
+#   1. ShellCheck - Static analysis of shell scripts
+#   2. Syntax validation - Bash syntax checking
+#   3. Executable permissions - Verify scripts can be executed
+#   4. Integration checks - Shebangs, error handling, secrets, TODOs
+#   5. Bats tests - Full behavioral test suite
+#
 # Usage: ./run-tests.sh
+#
+# Exit codes:
+#   0 - All tests passed
+#   1 - One or more tests failed
 
 set -euo pipefail
 
@@ -102,6 +117,13 @@ for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh lint-scripts.sh; d
         fail "$script missing 'set -euo pipefail'"
     fi
 done
+
+# Check for hardcoded secrets (basic patterns)
+if grep -r "password.*=" oc-*.sh 2>/dev/null | grep -v "read.*password\|PASSWORD.*read\|example\|# " | head -5; then
+    fail "Possible hardcoded password detected"
+else
+    ok "No hardcoded secrets found"
+fi
 
 # Check for TODO/FIXME
 if grep -rn "TODO\|FIXME\|XXX" oc-*.sh 2>/dev/null | grep -v "# TODO:\|# FIXME:\|Check for TODO"; then
