@@ -314,58 +314,29 @@ if sudo tailscale status >/dev/null 2>&1; then
 else
   echo ""
   warn "Tailscale not connected yet"
+  info "Generate a reusable auth key at: https://login.tailscale.com/admin/settings/keys"
   echo ""
 
   # Check if TAILSCALE_AUTH_KEY is already set (e.g., from oc-load-secrets.sh)
   TAILSCALE_AUTH_KEY="${TAILSCALE_AUTH_KEY:-}"
 
-  if [[ -n "$TAILSCALE_AUTH_KEY" ]]; then
+  if [[ -z "$TAILSCALE_AUTH_KEY" ]]; then
+    prompt_secret "Tailscale auth key (REQUIRED)" "TAILSCALE_AUTH_KEY" "tskey-auth-" || fail "Tailscale auth key is required"
+  else
     ok "Using Tailscale auth key from environment"
-  else
-    info "You can authenticate in two ways:"
-    info "  1. Browser flow: Run 'sudo tailscale up' and open the URL it provides"
-    info "  2. Auth key: Generate a reusable key at https://login.tailscale.com/admin/settings/keys"
-    echo ""
-
-    # Prompt for auth key
-    echo -n "  Do you have a Tailscale auth key? [y/N]: "
-    read -r HAS_AUTH_KEY
-
-    if [[ "$HAS_AUTH_KEY" =~ ^[Yy]$ ]]; then
-      if prompt_secret "Tailscale auth key" "TAILSCALE_AUTH_KEY" "tskey-auth-"; then
-        info "Will use auth key for authentication"
-      fi
-    fi
   fi
 
-  # Prompt to connect now
+  # Connect using auth key
   echo ""
-  echo -n "  Connect to Tailscale now? [Y/n]: "
-  read -r CONNECT_NOW
+  info "Connecting to Tailscale with auth key..."
+  sudo tailscale up --authkey="${TAILSCALE_AUTH_KEY}"
 
-  if [[ "$CONNECT_NOW" =~ ^[Nn]$ ]]; then
-    fail "Tailscale connection is REQUIRED — run 'sudo tailscale up' manually"
-  else
-    echo ""
-    info "Starting Tailscale connection..."
+  TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "unknown")
+  TAILSCALE_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // "unknown"' 2>/dev/null || echo "unknown")
 
-    if [[ -n "$TAILSCALE_AUTH_KEY" ]]; then
-      # Use auth key (non-interactive)
-      sudo tailscale up --authkey="${TAILSCALE_AUTH_KEY}"
-    else
-      # Use browser flow (interactive)
-      info "This will print an authentication URL — open it in your browser to authorize"
-      echo ""
-      sudo tailscale up
-    fi
-
-    TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "unknown")
-    TAILSCALE_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // "unknown"' 2>/dev/null || echo "unknown")
-
-    ok "Tailscale connected!"
-    info "Tailscale IP:       ${TAILSCALE_IP}"
-    info "Tailscale hostname: ${TAILSCALE_HOSTNAME}"
-  fi
+  ok "Tailscale connected!"
+  info "Tailscale IP:       ${TAILSCALE_IP}"
+  info "Tailscale hostname: ${TAILSCALE_HOSTNAME}"
 fi
 
 # Set up Tailscale serve to proxy the gateway
