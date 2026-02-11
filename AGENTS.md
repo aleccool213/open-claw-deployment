@@ -14,6 +14,7 @@ Heartbeats are periodic check-ins OpenClaw does to maintain context and keep the
 |------|---------|
 | Provision VPS | `hcloud server create --name openclaw --type cx22 --image ubuntu-24.04 --location fsn1 --ssh-key openclaw-key` |
 | Bootstrap (root) | `ssh root@<IP> 'bash -s' < oc-bootstrap.sh` |
+| Load secrets (optional) | `source ./oc-load-secrets.sh` |
 | Configure (deploy) | `ssh deploy@<IP> 'bash -s' < oc-configure.sh` |
 | SSH to VPS | `ssh deploy@$(hcloud server ip openclaw)` |
 | Open tunnel | `ssh -N -L 18789:127.0.0.1:18789 deploy@<IP>` |
@@ -27,6 +28,7 @@ Heartbeats are periodic check-ins OpenClaw does to maintain context and keep the
 .
 ├── oc-bootstrap.sh              # Run once as root on fresh VPS
 ├── oc-configure.sh              # Run as deploy user to configure integrations
+├── oc-load-secrets.sh           # (Optional) Load secrets from 1Password CLI
 ├── openclaw.json.example        # OpenClaw configuration template (OpenCode Zen)
 ├── openclaw-hetzner-checklist.md # Complete deployment checklist
 └── oc-scripts.zip               # Original archive (extracted above)
@@ -106,6 +108,36 @@ Located at `/home/deploy/.openclaw/openclaw.json`:
 - Service accounts cannot access Personal/Private vaults
 - Use `op run` or `op inject` to avoid plaintext secrets
 - **Required** for secure secret management (email passwords, API keys)
+
+#### Optional: Pre-load Secrets with oc-load-secrets.sh
+
+For faster configuration, use the `oc-load-secrets.sh` script to fetch secrets from 1Password before running `oc-configure.sh`:
+
+**Setup:**
+1. Install 1Password CLI: https://developer.1password.com/docs/cli/get-started/
+2. Create a vault named "OpenClaw" (or set `OP_VAULT` env var for custom name)
+3. Add the following items to the vault:
+   - "OpenCode Zen API Key" (field: credential)
+   - "Telegram Bot Token" (field: credential)
+   - "1Password Service Account" (field: credential)
+   - "Notion API Key" (field: credential) — optional
+   - "Email App Password" (field: password) — used by Himalaya at runtime
+4. Authenticate: `op signin` or export `OP_SERVICE_ACCOUNT_TOKEN`
+
+**Usage:**
+```bash
+# Load secrets from 1Password
+source ./oc-load-secrets.sh
+
+# Run configure - will skip prompts for pre-loaded secrets
+./oc-configure.sh
+```
+
+**Benefits:**
+- Skip manual secret entry during configuration
+- Centralized secret storage and rotation
+- Audit trail of secret access
+- Share deployment credentials securely with team
 
 ### 4. Email via Himalaya (REQUIRED)
 - CLI email client for IMAP/SMTP

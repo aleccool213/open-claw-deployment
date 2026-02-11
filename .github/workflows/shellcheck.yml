@@ -44,6 +44,7 @@ jobs:
           bash -n oc-provision.sh
           bash -n oc-bootstrap.sh
           bash -n oc-configure.sh
+          bash -n oc-load-secrets.sh
           bash -n lint-scripts.sh
           echo "✅ All scripts have valid syntax"
 
@@ -60,6 +61,7 @@ jobs:
           test -x oc-provision.sh || (echo "❌ oc-provision.sh is not executable" && exit 1)
           test -x oc-bootstrap.sh || (echo "❌ oc-bootstrap.sh is not executable" && exit 1)
           test -x oc-configure.sh || (echo "❌ oc-configure.sh is not executable" && exit 1)
+          test -x oc-load-secrets.sh || (echo "❌ oc-load-secrets.sh is not executable" && exit 1)
           test -x lint-scripts.sh || (echo "❌ lint-scripts.sh is not executable" && exit 1)
           echo "✅ All scripts are executable"
 
@@ -91,10 +93,13 @@ jobs:
       - name: Check for common issues
         run: |
           # Check for hardcoded secrets (basic patterns)
-          if grep -r "password.*=" oc-*.sh | grep -v "read.*password\|PASSWORD.*read\|example\|# " | head -5; then
+          matches=$(grep -r "password.*=" oc-*.sh | grep -v "read.*password\|PASSWORD.*read\|example\|# " || true)
+          if [ -n "$matches" ]; then
             echo "⚠️  Warning: Possible hardcoded password detected"
+            echo "$matches"
             exit 1
           fi
+          echo "✅ No hardcoded passwords found"
           
           # Check for TODO/FIXME markers
           if grep -rn "TODO\|FIXME\|XXX" oc-*.sh | grep -v "# TODO:\|# FIXME:\|Check for TODO"; then
