@@ -251,9 +251,11 @@ Add these options to your `openclaw-gateway` service in `docker-compose.yml`:
 - [ ] Log rotation keeps disk from filling up
 - [ ] **Never mount `/var/run/docker.sock`** into the container — it's equivalent to root on the host
 
-### 17. Tailscale (optional — replaces SSH tunnel)
+### 17. Tailscale (REQUIRED — secure zero-trust network access)
 
-If you want access from mobile/multiple devices without SSH tunnels:
+Tailscale provides secure access to your OpenClaw gateway from any device without exposing ports or managing SSH tunnels.
+
+**Installation and setup are automated in the bootstrap and configure scripts**, but for manual setup:
 
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
@@ -261,11 +263,12 @@ sudo tailscale up
 sudo ufw allow in on tailscale0
 
 # Proxy the gateway through Tailscale (keeps Docker binding on 127.0.0.1)
-sudo tailscale serve --bg http://127.0.0.1:18789
+sudo tailscale serve --bg --https=443 http://127.0.0.1:18789
 ```
 
-- [ ] Access from any tailnet device at `http://<tailscale-ip>:18789/`
+- [ ] Access from any tailnet device at `https://<your-machine-name>.tailnet-name.ts.net/`
 - [ ] Do NOT change Docker port binding from `127.0.0.1` to `0.0.0.0` — use `tailscale serve` instead
+- [ ] Tailscale provides encrypted connections and zero-trust access control
 
 ### 18. Automated backups
 
@@ -333,7 +336,8 @@ cd /home/deploy/openclaw && docker compose up -d --force-recreate openclaw-gatew
 After deployment, verify:
 
 - [ ] SSH: key-only, root login disabled, fail2ban active
-- [ ] Firewall: UFW enabled, default deny, only SSH allowed
+- [ ] Firewall: UFW enabled, default deny, only SSH allowed, Tailscale interface permitted
+- [ ] Tailscale: connected and serving gateway on HTTPS
 - [ ] Docker: ports bound to `127.0.0.1`, `no-new-privileges`, no socket mount
 - [ ] Secrets: `.env` is `chmod 600`, not committed to git
 - [ ] Backups: timer running, manually tested at least once

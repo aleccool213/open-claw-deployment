@@ -187,19 +187,28 @@ fi
 # PHASE 3: SECURITY HARDENING
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "5/9 — Firewall (UFW)"
+step "5/9 — Tailscale (REQUIRED for secure access)"
+echo "  Installing Tailscale..."
+curl -fsSL https://tailscale.com/install.sh | sh >/dev/null 2>&1
+
+verify "Tailscale installed" "command -v tailscale"
+ok "Tailscale installed — you'll configure it in oc-configure.sh"
+
+step "6/9 — Firewall (UFW)"
 apt-get install -y -qq ufw > /dev/null
 
 ufw default deny incoming >/dev/null
 ufw default allow outgoing >/dev/null
 ufw allow OpenSSH >/dev/null
+# Allow Tailscale traffic
+ufw allow in on tailscale0 >/dev/null 2>&1 || true
 yes | ufw enable >/dev/null 2>&1 || true
 
 verify "UFW active" "ufw status | grep -q 'Status: active'"
 verify "SSH allowed" "ufw status | grep -q '22/tcp'"
-ok "Only SSH (22) allowed incoming — gateway accessed via SSH tunnel"
+ok "SSH allowed, Tailscale interface permitted"
 
-step "6/9 — fail2ban"
+step "7/9 — fail2ban"
 apt-get install -y -qq fail2ban > /dev/null
 
 cat > /etc/fail2ban/jail.local <<'EOF'
@@ -216,7 +225,7 @@ sleep 2
 verify "fail2ban running" "systemctl is-active fail2ban"
 verify "sshd jail active" "fail2ban-client status sshd 2>/dev/null | grep -q 'Currently failed'"
 
-step "7/9 — Automatic security updates"
+step "8/9 — Automatic security updates"
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unattended-upgrades > /dev/null
 echo 'Unattended-Upgrade::Automatic-Reboot "false";' > /etc/apt/apt.conf.d/51custom-unattended
 dpkg-reconfigure -plow unattended-upgrades 2>/dev/null || true
@@ -224,7 +233,7 @@ verify "unattended-upgrades installed" "dpkg -l | grep -q unattended-upgrades"
 
 # ── SSH hardening (dangerous step — verify access first) ─────────────────
 
-step "8/9 — SSH hardening"
+step "9/9 — SSH hardening"
 
 VPS_IP=$(hostname -I | awk '{print $1}')
 echo ""
@@ -253,7 +262,7 @@ warn "Root SSH is now disabled. Use 'ssh deploy@${VPS_IP}' from now on."
 # PHASE 4: BACKUPS
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "9/9 — Automated backups"
+step "10/10 — Automated backups"
 
 mkdir -p /var/backups/openclaw
 
@@ -306,6 +315,7 @@ echo ""
 echo "  Summary:"
 echo "    • Docker + OpenClaw gateway running"
 echo "    • deploy user created with SSH access"
+echo "    • Tailscale installed (configure in next step)"
 echo "    • UFW firewall + fail2ban active"
 echo "    • Automatic security updates enabled"
 echo "    • Daily backups at 03:00 UTC"

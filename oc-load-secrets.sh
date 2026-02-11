@@ -20,6 +20,7 @@
 #   - "OpenCode Zen API Key" — field: credential
 #   - "Telegram Bot Token" — field: credential
 #   - "1Password Service Account" — field: credential
+#   - "Tailscale Auth Key" — field: credential
 #
 # OPTIONAL 1PASSWORD ITEMS:
 #   - "Notion API Key" — field: credential
@@ -30,6 +31,7 @@
 #   - TELEGRAM_BOT_TOKEN
 #   - OP_SERVICE_ACCOUNT_TOKEN
 #   - NOTION_API_KEY (optional)
+#   - TAILSCALE_AUTH_KEY (optional)
 #
 
 set -euo pipefail
@@ -160,6 +162,7 @@ fetch_secret() {
 fetch_secret "OpenCode Zen API Key" "credential" "OPENCODE_ZEN_API_KEY" || return 1
 fetch_secret "Telegram Bot Token" "credential" "TELEGRAM_BOT_TOKEN" || return 1
 fetch_secret "1Password Service Account" "credential" "OP_SERVICE_ACCOUNT_TOKEN" || return 1
+fetch_secret "Tailscale Auth Key" "credential" "TAILSCALE_AUTH_KEY" || return 1
 
 # Fetch optional secrets
 fetch_secret "Notion API Key" "credential" "NOTION_API_KEY" "true"
@@ -174,6 +177,7 @@ echo "Environment variables exported:"
 echo "  ✓ OPENCODE_ZEN_API_KEY=${OPENCODE_ZEN_API_KEY:0:12}..."
 echo "  ✓ TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:0:12}..."
 echo "  ✓ OP_SERVICE_ACCOUNT_TOKEN=${OP_SERVICE_ACCOUNT_TOKEN:0:12}..."
+echo "  ✓ TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY:0:12}..."
 
 if [[ -n "${NOTION_API_KEY:-}" ]]; then
     echo "  ✓ NOTION_API_KEY=${NOTION_API_KEY:0:12}..."

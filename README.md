@@ -94,10 +94,22 @@ Scripts will prompt for these required credentials:
 2. **Telegram bot token** — Chat interface (@BotFather)
 3. **1Password service account** — Secure secret storage
 4. **Email account** — Gmail/Fastmail with app password
+5. **Tailscale auth key** — Secure network access (generate at https://login.tailscale.com/admin/settings/keys)
+
+### Generating a Tailscale Auth Key
+
+To create a reusable Tailscale auth key:
+
+1. Visit https://login.tailscale.com/admin/settings/keys
+2. Click "Generate auth key"
+3. Enable "Reusable" option for deploying multiple servers
+4. Optionally set an expiration (or leave as ephemeral for testing)
+5. Copy the auth key (format: `tskey-auth-xxxxx`)
+6. Store it in 1Password or provide it when prompted during configuration
 
 ## Optional Integrations
 
-5. **Notion API key** — Document management (can skip)
+6. **Notion API key** — Document management (can skip)
 
 ## 1Password Integration (Optional but Recommended)
 
@@ -110,6 +122,7 @@ For faster setup and centralized secret management, you can use the `oc-load-sec
    - "OpenCode Zen API Key" (field: credential)
    - "Telegram Bot Token" (field: credential)
    - "1Password Service Account" (field: credential)
+   - "Tailscale Auth Key" (field: credential)
    - "Notion API Key" (field: credential) — optional
    - "Email App Password" (field: password) — used by Himalaya at runtime
 3. **Install 1Password CLI**: https://developer.1password.com/docs/cli/get-started/
