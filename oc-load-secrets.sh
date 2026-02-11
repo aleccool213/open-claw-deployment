@@ -23,6 +23,7 @@
 #
 # OPTIONAL 1PASSWORD ITEMS:
 #   - "Notion API Key" — field: credential
+#   - "Tailscale Auth Key" — field: credential
 #   - "Email App Password" — field: password (used by Himalaya at runtime)
 #
 # ENVIRONMENT VARIABLES EXPORTED:
@@ -30,6 +31,7 @@
 #   - TELEGRAM_BOT_TOKEN
 #   - OP_SERVICE_ACCOUNT_TOKEN
 #   - NOTION_API_KEY (optional)
+#   - TAILSCALE_AUTH_KEY (optional)
 #
 
 set -euo pipefail
@@ -163,6 +165,7 @@ fetch_secret "1Password Service Account" "credential" "OP_SERVICE_ACCOUNT_TOKEN"
 
 # Fetch optional secrets
 fetch_secret "Notion API Key" "credential" "NOTION_API_KEY" "true"
+fetch_secret "Tailscale Auth Key" "credential" "TAILSCALE_AUTH_KEY" "true"
 
 # ================================================================
 # Summary
@@ -179,6 +182,12 @@ if [[ -n "${NOTION_API_KEY:-}" ]]; then
     echo "  ✓ NOTION_API_KEY=${NOTION_API_KEY:0:12}..."
 else
     echo "  − NOTION_API_KEY (not set, will prompt during configure)"
+fi
+
+if [[ -n "${TAILSCALE_AUTH_KEY:-}" ]]; then
+    echo "  ✓ TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY:0:12}..."
+else
+    echo "  − TAILSCALE_AUTH_KEY (not set, will use browser flow)"
 fi
 
 echo ""

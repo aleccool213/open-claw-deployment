@@ -315,19 +315,26 @@ else
   echo ""
   warn "Tailscale not connected yet"
   echo ""
-  info "You can authenticate in two ways:"
-  info "  1. Browser flow: Run 'sudo tailscale up' and open the URL it provides"
-  info "  2. Auth key: Generate a reusable key at https://login.tailscale.com/admin/settings/keys"
-  echo ""
 
-  # Prompt for auth key
-  echo -n "  Do you have a Tailscale auth key? [y/N]: "
-  read -r HAS_AUTH_KEY
+  # Check if TAILSCALE_AUTH_KEY is already set (e.g., from oc-load-secrets.sh)
+  TAILSCALE_AUTH_KEY="${TAILSCALE_AUTH_KEY:-}"
 
-  TAILSCALE_AUTH_KEY=""
-  if [[ "$HAS_AUTH_KEY" =~ ^[Yy]$ ]]; then
-    if prompt_secret "Tailscale auth key" "TAILSCALE_AUTH_KEY" "tskey-auth-"; then
-      info "Will use auth key for authentication"
+  if [[ -n "$TAILSCALE_AUTH_KEY" ]]; then
+    ok "Using Tailscale auth key from environment"
+  else
+    info "You can authenticate in two ways:"
+    info "  1. Browser flow: Run 'sudo tailscale up' and open the URL it provides"
+    info "  2. Auth key: Generate a reusable key at https://login.tailscale.com/admin/settings/keys"
+    echo ""
+
+    # Prompt for auth key
+    echo -n "  Do you have a Tailscale auth key? [y/N]: "
+    read -r HAS_AUTH_KEY
+
+    if [[ "$HAS_AUTH_KEY" =~ ^[Yy]$ ]]; then
+      if prompt_secret "Tailscale auth key" "TAILSCALE_AUTH_KEY" "tskey-auth-"; then
+        info "Will use auth key for authentication"
+      fi
     fi
   fi
 
