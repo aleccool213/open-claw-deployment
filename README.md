@@ -1,61 +1,138 @@
-# OpenClaw Hetzner Deployment
+# Alec's OpenClaw Setup
 
-Deploy [OpenClaw](https://github.com/openclaw/openclaw) — an AI agent gateway — on a $5/month Hetzner VPS with sensible defaults and cost-optimized configuration.
+This is my opinionated deployment of [OpenClaw](https://github.com/openclaw/openclaw) that prioritizes **simplicity** and **value**. No overcomplicated orchestration, no vendor lock-in, just straightforward scripts that get OpenClaw running on a $5/month VPS.
 
-## What This Does
+## Philosophy
 
-This repo provides automated scripts to:
+I believe in setups that are:
+- **Simple to understand** — Plain bash scripts you can read and modify
+- **Cheap to run** — $5-20/month total, not hundreds
+- **Easy to maintain** — No complex tooling, just SSH and Docker
+- **Secure by default** — Hardened from the start, not as an afterthought
 
-1. **Provision a secure VPS** on Hetzner Cloud with hardened SSH, firewall, and fail2ban
-2. **Deploy OpenClaw Gateway** as a Docker container with persistent state
-3. **Configure integrations** using free/cheap AI models via OpenCode Zen
-4. **Set up secure secret management** with 1Password integration
-5. **Enable notifications** via Telegram bot and email (Himalaya CLI)
+If you want Kubernetes with 47 microservices, this isn't for you. If you want AI automation that just works without breaking the bank, read on.
+
+## What is OpenClaw?
+
+OpenClaw is an **AI agent gateway** that connects AI assistants (like Claude) to your real-world tools. Think of it as a bridge that lets AI:
+- Send you Telegram messages
+- Read and write emails on your behalf
+- Manage your Notion databases
+- Interact with any API you configure
+
+Instead of copy-pasting between ChatGPT and your tools, OpenClaw lets AI take actions directly. It's particularly powerful for automation workflows and notifications.
+
+## What These Scripts Do
+
+This repo contains three main scripts that automate the entire deployment:
+
+### 1. `oc-bootstrap.sh` — Server Setup (Run Once)
+**What it does:** Takes a bare Ubuntu VPS and hardens it for production use.
+- Creates a non-root user (`deploy`) for running services
+- Configures SSH to use keys only (disables password login)
+- Sets up a firewall (UFW) to block everything except SSH
+- Installs fail2ban to prevent brute-force attacks
+- Installs Docker for running OpenClaw in a container
+- Sets up automatic security updates
+
+**When to run:** Once, right after creating a fresh VPS. Run as `root`.
+
+### 2. `oc-configure.sh` — OpenClaw Configuration
+**What it does:** Installs and configures OpenClaw with your integrations.
+- Prompts for API keys (OpenCode Zen, Telegram, etc.)
+- Generates the OpenClaw configuration file
+- Deploys OpenClaw as a Docker container
+- Sets up email client (Himalaya) for IMAP/SMTP
+- Configures the container to restart automatically
+
+**When to run:** After bootstrap completes. Run as `deploy` user (not root).
+
+### 3. `oc-load-secrets.sh` — 1Password Integration (Optional)
+**What it does:** Pre-loads your API keys from 1Password so you don't have to type them manually.
+- Connects to 1Password CLI
+- Fetches credentials from your vault
+- Exports them as environment variables
+- Used before running `oc-configure.sh` for faster setup
+
+**When to run:** Before `oc-configure.sh` if you have secrets in 1Password.
 
 ## Quick Start
 
+Here's how to go from zero to running OpenClaw in about 10 minutes:
+
 ```bash
-# 1. Provision VPS (install hcloud CLI first)
+# Step 1: Create a VPS on Hetzner (requires hcloud CLI installed)
+# This creates a $5/month server in their Finland datacenter
 hcloud server create --name openclaw --type cx22 --image ubuntu-24.04 \
   --location fsn1 --ssh-key your-key
 
-# 2. Bootstrap the server (run as root)
+# Step 2: Harden the server (SSH as root, pipe in bootstrap script)
+# This sets up security, creates 'deploy' user, installs Docker
 ssh root@$(hcloud server ip openclaw) 'bash -s' < oc-bootstrap.sh
 
-# 3a. (Optional) Load secrets from 1Password
-source ./oc-load-secrets.sh  # Pre-load secrets to skip manual entry
+# Step 3a: (Optional) Pre-load secrets from 1Password
+# If you have secrets in 1Password, load them now to avoid manual typing
+source ./oc-load-secrets.sh
 
-# 3b. Configure integrations (run as deploy user)
+# Step 3b: Configure OpenClaw (SSH as 'deploy' user, pipe in config script)
+# This installs OpenClaw, prompts for API keys, sets up integrations
 ssh deploy@$(hcloud server ip openclaw) 'bash -s' < oc-configure.sh
 
-# 4. Open SSH tunnel to access gateway
+# Step 4: Open an SSH tunnel to access the gateway
+# OpenClaw only listens on localhost for security - tunnel to reach it
 ssh -N -L 18789:127.0.0.1:18789 deploy@$(hcloud server ip openclaw)
 
-# 5. Access OpenClaw at http://localhost:18789
+# Step 5: Open your browser
+# Go to http://localhost:18789 and start using OpenClaw
 ```
 
-## Why This Setup?
+**That's it.** Your AI gateway is running, secured, and ready to use.
 
-### Cost Optimization
+## Why I Built This
 
-| Component | Cost |
-|-----------|------|
-| **Model Provider** (OpenCode Zen) | **$0-15/month** |
-| **VPS** (Hetzner cx22) | $5/month |
+### The Value Proposition
+
+Most "production-ready" AI deployments want you to spend $100-500/month on managed platforms. That's ridiculous for a personal AI gateway that mostly sits idle. Here's what I actually spend:
+
+| Component | Monthly Cost |
+|-----------|--------------|
+| **Hetzner VPS** (cx22: 2 vCPU, 4GB RAM) | $5 |
+| **OpenCode Zen API** (free tier + usage) | $0-15 |
 | **Total** | **$5-20/month** |
 
-Cost savings achieved by:
-- Using OpenCode Zen (free models during beta: Grok Code Fast 1, GLM 4.7)
-- Reducing heartbeat frequency from 30min to 2h (75% fewer API calls)
-- No platform fees
+**How I keep costs low:**
+- **OpenCode Zen** gives you free access to Grok Code Fast 1 and GLM 4.7 during beta
+- **Heartbeat tuning**: Changed from 30min to 2h intervals (75% fewer API calls)
+- **No platform markup**: Direct to providers, no middleman fees
+- **Efficient hosting**: Hetzner is 3-5x cheaper than AWS/GCP for equivalent specs
 
-### Security-First Design
+### The Simplicity Principle
 
-- **SSH hardening**: Key-only auth, root disabled, fail2ban monitoring
-- **Network isolation**: Gateway only accessible via SSH tunnel (port 18789 bound to localhost)
-- **Secret management**: All credentials stored in 1Password, never in plaintext
-- **Automatic backups**: Daily encrypted backups of all state
-- **Security updates**: Unattended-upgrades enabled
+**One VPS. Three scripts. That's it.**
+
+I don't use:
+- Kubernetes (overkill for a single container)
+- Terraform (harder to debug than a bash script)
+- Docker Compose (unnecessary abstraction layer)
+- Configuration management tools (you have SSH)
+
+Instead:
+- Direct `docker run` commands you can understand
+- Plain bash scripts you can edit in 5 minutes
+- SSH tunnels instead of complex network setups
+- Standard Linux tools everyone knows
+
+### Security Without Complexity
+
+I don't compromise on security, but I don't overcomplicate it either:
+
+- **SSH hardening**: Keys only, no passwords, fail2ban watching for attacks
+- **Network isolation**: Gateway only accessible via SSH tunnel (never exposed to internet)
+- **Secret management**: 1Password integration for credentials (no plaintext files)
+- **Firewall**: UFW blocks everything except SSH
+- **Auto-updates**: Unattended-upgrades keeps the system patched
+
+The threat model is simple: prevent unauthorized access, protect secrets, keep software updated. You don't need a security team for this.
 
 ## Architecture
 
@@ -86,90 +163,136 @@ Cost savings achieved by:
                         └─────────────────┘
 ```
 
-## Required Integrations
+## What You'll Need
 
-Scripts will prompt for these required credentials:
+The `oc-configure.sh` script will prompt you for these credentials. Here's what each one does:
 
-1. **OpenCode Zen API key** — Model provider (free tier available)
-2. **Telegram bot token** — Chat interface (@BotFather)
-3. **1Password service account** — Secure secret storage
-4. **Email account** — Gmail/Fastmail with app password
+### Required Integrations
 
-## Optional Integrations
+1. **OpenCode Zen API key** ([get one here](https://opencodezen.com))
+   - This is your AI model provider
+   - Free tier includes Grok Code Fast 1 and GLM 4.7
+   - OpenClaw uses this to power the AI agent
 
-5. **Notion API key** — Document management (can skip)
+2. **Telegram bot token** (create via [@BotFather](https://t.me/botfather))
+   - Lets OpenClaw send you Telegram messages
+   - Main interface for notifications and interactions
+   - Free to create and use
 
-## 1Password Integration (Optional but Recommended)
+3. **1Password service account** ([setup guide](https://developer.1password.com/docs/service-accounts/))
+   - OpenClaw stores integration secrets securely
+   - Better than plaintext config files
+   - Optional for initial setup, but recommended
 
-For faster setup and centralized secret management, you can use the `oc-load-secrets.sh` script to fetch credentials from 1Password CLI:
+4. **Email account with app password** (Gmail or Fastmail)
+   - Lets OpenClaw read and send emails on your behalf
+   - You'll need IMAP/SMTP access enabled
+   - Use an app-specific password, not your main password
 
-### Setup
+### Optional Integrations
 
-1. **Create a 1Password vault** named `OpenClaw` (or use `OP_VAULT` env var for custom name)
-2. **Add these items to the vault:**
-   - "OpenCode Zen API Key" (field: credential)
-   - "Telegram Bot Token" (field: credential)
-   - "1Password Service Account" (field: credential)
-   - "Notion API Key" (field: credential) — optional
-   - "Email App Password" (field: password) — used by Himalaya at runtime
-3. **Install 1Password CLI**: https://developer.1password.com/docs/cli/get-started/
-4. **Authenticate**: `op signin` or export `OP_SERVICE_ACCOUNT_TOKEN`
+5. **Notion API key** ([create integration](https://www.notion.so/my-integrations))
+   - Lets OpenClaw read/write Notion databases
+   - Only needed if you use Notion
+   - Can skip during setup and add later
 
-### Usage
+## 1Password Integration (Optional but Worth It)
+
+If you're like me and have dozens of API keys, manually typing them during setup gets old. The `oc-load-secrets.sh` script pulls everything from 1Password automatically.
+
+### How to Set It Up
+
+1. **Create a vault** in 1Password called `OpenClaw`
+   - You can use a different name by setting `OP_VAULT` environment variable
+
+2. **Add these items** to your vault (exact names matter):
+   - **"OpenCode Zen API Key"** — Add field called `credential`
+   - **"Telegram Bot Token"** — Add field called `credential`
+   - **"1Password Service Account"** — Add field called `credential`
+   - **"Notion API Key"** — Add field called `credential` (optional)
+   - **"Email App Password"** — Add field called `password`
+
+3. **Install 1Password CLI** — [Download here](https://developer.1password.com/docs/cli/get-started/)
+
+4. **Authenticate** — Run `op signin` or set `OP_SERVICE_ACCOUNT_TOKEN`
+
+### How to Use It
 
 ```bash
-# Load secrets from 1Password before configuring
+# Load all secrets into environment variables
 source ./oc-load-secrets.sh
 
-# Now run configure - it will use the pre-loaded secrets
-./oc-configure.sh
+# Now run configure - it won't prompt you for any secrets
+ssh deploy@$(hcloud server ip openclaw) 'bash -s' < oc-configure.sh
 ```
 
-**Benefits:**
-- Skip manual secret entry during configuration
-- Centralized secret storage and rotation
-- Audit trail of secret access
-- Share secrets securely with team members
+### Why Bother?
+
+- **Faster setup** — No typing 5 API keys manually
+- **Better security** — Secrets in 1Password, not shell history
+- **Easy rotation** — Update in 1Password, reload script
+- **Team sharing** — Share vault instead of Slack messages
 
 ## Repository Structure
 
 ```
 .
-├── oc-bootstrap.sh           # Run once as root on fresh VPS
-├── oc-configure.sh           # Run as deploy user for integrations
-├── oc-load-secrets.sh        # (Optional) Load secrets from 1Password CLI
-├── openclaw.json.example     # Gateway configuration template
-├── run-tests.sh              # Consolidated test suite (all tests)
-├── lint-scripts.sh           # ShellCheck linting only
-├── tests/                    # Bats test suite
-├── AGENTS.md                 # Detailed documentation
-└── .github/workflows/        # CI/CD for script validation
+├── oc-bootstrap.sh           # Server hardening and Docker setup
+├── oc-configure.sh           # OpenClaw installation and config
+├── oc-load-secrets.sh        # 1Password secret loader (optional)
+├── openclaw.json.example     # Configuration template
+├── run-tests.sh              # Full test suite (runs all checks)
+├── lint-scripts.sh           # ShellCheck linter only
+├── tests/                    # Bats integration tests
+├── AGENTS.md                 # Detailed technical docs
+└── .github/workflows/        # CI/CD pipeline
 ```
 
-## Development
+## Testing and Development
+
+I include a solid test suite because bash scripts break easily. Before pushing changes, run:
 
 ```bash
-# Run all tests locally (ShellCheck, syntax, permissions, integration, Bats)
+# Run everything (what GitHub Actions runs)
 ./run-tests.sh
-
-# Or run individual test categories:
-./lint-scripts.sh                    # Just ShellCheck linting
-bash -n oc-bootstrap.sh              # Just syntax validation
-bats tests/*.bats                    # Just Bats tests
 ```
 
-The `run-tests.sh` script runs the complete test suite that matches GitHub Actions CI/CD, ensuring your changes will pass all automated checks.
+This runs:
+- **ShellCheck** — Catches common bash mistakes (undefined variables, quoting issues)
+- **Syntax validation** — Ensures scripts are valid bash
+- **Permission checks** — Verifies scripts are executable
+- **Bats tests** — Integration tests that verify actual functionality
 
-## Documentation
+If you just want to check your syntax quickly:
 
-- [AGENTS.md](AGENTS.md) — Complete deployment guide, cost breakdown, troubleshooting
-- [openclaw-hetzner-checklist.md](openclaw-hetzner-checklist.md) — Step-by-step terminal checklist
-- [OpenClaw Docs](https://docs.openclaw.ai) — Official OpenClaw documentation
+```bash
+./lint-scripts.sh           # Fast: just runs ShellCheck
+bash -n oc-bootstrap.sh     # Faster: just checks syntax
+```
+
+The test suite catches ~90% of issues before they hit production. Worth the 30 seconds.
+
+## More Documentation
+
+- **[AGENTS.md](AGENTS.md)** — Detailed technical guide with troubleshooting
+- **[openclaw-hetzner-checklist.md](openclaw-hetzner-checklist.md)** — Step-by-step deployment checklist
+- **[OpenClaw Docs](https://docs.openclaw.ai)** — Official OpenClaw documentation
 
 ## License
 
-MIT — See repository for details.
+MIT — Do whatever you want with this.
 
 ---
 
-**Note**: This is a deployment template. Review and customize scripts for your specific security requirements before production use.
+## Final Thoughts
+
+This setup reflects my belief that good infrastructure should be:
+1. **Understandable** — If you can't explain it, you can't debug it
+2. **Affordable** — Cloud bills shouldn't exceed your Netflix subscription
+3. **Maintainable** — You should be able to fix it at 2am without Googling
+
+I'm not saying this is the only way to run OpenClaw. If you need high availability, multi-region deployments, or enterprise compliance, you'll need something more complex. But for personal use or small teams? This is plenty.
+
+Feel free to fork, modify, and adapt this to your needs. If you find bugs or have improvements, PRs are welcome.
+
+— Alec
