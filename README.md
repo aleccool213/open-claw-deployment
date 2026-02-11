@@ -189,9 +189,25 @@ The `oc-configure.sh` script will prompt you for these credentials. Here's what 
    - You'll need IMAP/SMTP access enabled
    - Use an app-specific password, not your main password
 
+5. **Tailscale auth key** ([generate here](https://login.tailscale.com/admin/settings/keys))
+   - Provides secure network access to your VPS
+   - Better than exposing SSH to the internet
+   - See "Generating a Tailscale Auth Key" section below
+
+### Generating a Tailscale Auth Key
+
+To create a reusable Tailscale auth key:
+
+1. Visit https://login.tailscale.com/admin/settings/keys
+2. Click "Generate auth key"
+3. Enable "Reusable" option for deploying multiple servers
+4. Optionally set an expiration (or leave as ephemeral for testing)
+5. Copy the auth key (format: `tskey-auth-xxxxx`)
+6. Store it in 1Password or provide it when prompted during configuration
+
 ### Optional Integrations
 
-5. **Notion API key** ([create integration](https://www.notion.so/my-integrations))
+6. **Notion API key** ([create integration](https://www.notion.so/my-integrations))
    - Lets OpenClaw read/write Notion databases
    - Only needed if you use Notion
    - Can skip during setup and add later
@@ -209,6 +225,7 @@ If you're like me and have dozens of API keys, manually typing them during setup
    - **"OpenCode Zen API Key"** — Add field called `credential`
    - **"Telegram Bot Token"** — Add field called `credential`
    - **"1Password Service Account"** — Add field called `credential`
+   - **"Tailscale Auth Key"** — Add field called `credential`
    - **"Notion API Key"** — Add field called `credential` (optional)
    - **"Email App Password"** — Add field called `password`
 
@@ -228,7 +245,7 @@ ssh deploy@$(hcloud server ip openclaw) 'bash -s' < oc-configure.sh
 
 ### Why Bother?
 
-- **Faster setup** — No typing 5 API keys manually
+- **Faster setup** — No typing 6 API keys manually
 - **Better security** — Secrets in 1Password, not shell history
 - **Easy rotation** — Update in 1Password, reload script
 - **Team sharing** — Share vault instead of Slack messages
