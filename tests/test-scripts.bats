@@ -115,6 +115,11 @@ setup() {
     grep -q "OpenCode Zen" "${SCRIPT_DIR}/oc-configure.sh"
 }
 
+@test "configure script has Todoist integration" {
+    grep -q "Todoist" "${SCRIPT_DIR}/oc-configure.sh"
+    grep -q "TODOIST_API_KEY" "${SCRIPT_DIR}/oc-configure.sh"
+}
+
 # ── Security Tests ────────────────────────────────────────────────────────────
 
 @test "scripts do not contain hardcoded secrets (basic check)" {

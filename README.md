@@ -157,7 +157,11 @@ The threat model is simple: prevent unauthorized access, protect secrets, keep s
 │  - Telegram bot │────▶│  Telegram API   │
 │  - Email (SMTP) │     └─────────────────┘
 │  - Notion API   │
-└─────────────────┘     ┌─────────────────┐
+│  - Todoist API  │     ┌─────────────────┐
+└─────────────────┘     │  Todoist        │
+                        │  (task tracking)│
+                        └─────────────────┘
+                        ┌─────────────────┐
                         │  Gmail/Fastmail │
                         │  (IMAP/SMTP)    │
                         └─────────────────┘
@@ -212,6 +216,11 @@ To create a reusable Tailscale auth key:
    - Only needed if you use Notion
    - Can skip during setup and add later
 
+7. **Todoist API token** ([get token](https://todoist.com/prefs/integrations))
+   - Lets OpenClaw create, update, and track tasks in Todoist
+   - Only needed if you use Todoist for task management
+   - Can skip during setup and add later
+
 ## 1Password Integration (Optional but Worth It)
 
 If you're like me and have dozens of API keys, manually typing them during setup gets old. The `oc-load-secrets.sh` script pulls everything from 1Password automatically.
@@ -227,6 +236,7 @@ If you're like me and have dozens of API keys, manually typing them during setup
    - **"1Password Service Account"** — Add field called `credential`
    - **"Tailscale Auth Key"** — Add field called `credential`
    - **"Notion API Key"** — Add field called `credential` (optional)
+   - **"Todoist API Token"** — Add field called `credential` (optional)
    - **"Email App Password"** — Add field called `password`
 
 3. **Install 1Password CLI** — [Download here](https://developer.1password.com/docs/cli/get-started/)
