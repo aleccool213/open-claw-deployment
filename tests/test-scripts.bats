@@ -11,20 +11,20 @@ setup() {
 # ── General Script Tests ────────────────────────────────────────────────────
 
 @test "all scripts have correct shebang" {
-    for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh lint-scripts.sh; do
+    for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh oc-load-secrets.sh lint-scripts.sh; do
         run head -1 "${SCRIPT_DIR}/${script}"
         [ "$output" = "#!/usr/bin/env bash" ]
     done
 }
 
 @test "all scripts have set -euo pipefail" {
-    for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh lint-scripts.sh; do
+    for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh oc-load-secrets.sh lint-scripts.sh; do
         grep -q "set -euo pipefail" "${SCRIPT_DIR}/${script}"
     done
 }
 
 @test "all scripts are executable" {
-    for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh lint-scripts.sh; do
+    for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh oc-load-secrets.sh lint-scripts.sh; do
         [ -x "${SCRIPT_DIR}/${script}" ]
     done
 }
