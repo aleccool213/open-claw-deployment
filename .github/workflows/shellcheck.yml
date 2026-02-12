@@ -102,7 +102,7 @@ jobs:
           echo "✅ No hardcoded passwords found"
           
           # Check for TODO/FIXME markers
-          if grep -rn "TODO\|FIXME\|XXX" oc-*.sh | grep -v "# TODO:\|# FIXME:\|Check for TODO"; then
+          if grep -rPn '\bTODO\b|\bFIXME\b|\bXXX\b' oc-*.sh | grep -v "# TODO:\|# FIXME:\|Check for TODO"; then
             echo "⚠️  Warning: Found TODO/FIXME markers"
             exit 1
           fi
