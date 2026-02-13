@@ -24,6 +24,7 @@
 #
 # OPTIONAL 1PASSWORD ITEMS:
 #   - "Notion API Key" — field: credential
+#   - "Todoist API Token" — field: credential
 #   - "Email App Password" — field: password (used by Himalaya at runtime)
 #
 # ENVIRONMENT VARIABLES EXPORTED:
@@ -31,6 +32,7 @@
 #   - TELEGRAM_BOT_TOKEN
 #   - OP_SERVICE_ACCOUNT_TOKEN
 #   - NOTION_API_KEY (optional)
+#   - TODOIST_API_KEY (optional)
 #   - TAILSCALE_AUTH_KEY (optional)
 #
 
@@ -166,6 +168,7 @@ fetch_secret "Tailscale Auth Key" "credential" "TAILSCALE_AUTH_KEY" || return 1
 
 # Fetch optional secrets
 fetch_secret "Notion API Key" "credential" "NOTION_API_KEY" "true"
+fetch_secret "Todoist API Token" "credential" "TODOIST_API_KEY" "true"
 
 # ================================================================
 # Summary
@@ -183,6 +186,12 @@ if [[ -n "${NOTION_API_KEY:-}" ]]; then
     echo "  ✓ NOTION_API_KEY=${NOTION_API_KEY:0:12}..."
 else
     echo "  − NOTION_API_KEY (not set, will prompt during configure)"
+fi
+
+if [[ -n "${TODOIST_API_KEY:-}" ]]; then
+    echo "  ✓ TODOIST_API_KEY=${TODOIST_API_KEY:0:12}..."
+else
+    echo "  − TODOIST_API_KEY (not set, will prompt during configure)"
 fi
 
 echo ""

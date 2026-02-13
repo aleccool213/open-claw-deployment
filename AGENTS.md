@@ -75,6 +75,7 @@ OP_SERVICE_ACCOUNT_TOKEN=ops_eyJ...
 
 # Optional:
 NOTION_API_KEY=ntn_...
+TODOIST_API_KEY=...
 ```
 
 ### OpenClaw Config (openclaw.json)
@@ -121,6 +122,7 @@ For faster configuration, use the `oc-load-secrets.sh` script to fetch secrets f
    - "Telegram Bot Token" (field: credential)
    - "1Password Service Account" (field: credential)
    - "Notion API Key" (field: credential) — optional
+   - "Todoist API Token" (field: credential) — optional
    - "Email App Password" (field: password) — used by Himalaya at runtime
 4. Authenticate: `op signin` or export `OP_SERVICE_ACCOUNT_TOKEN`
 
@@ -150,6 +152,12 @@ source ./oc-load-secrets.sh
 - Create integration at notion.so/my-integrations
 - Must explicitly share each page with the integration
 - API version: 2025-09-03
+
+### 6. Todoist (Optional)
+- Get API token at: https://todoist.com/prefs/integrations (under "Developer")
+- REST API v2: https://api.todoist.com/rest/v2/
+- Enables task tracking and project management via OpenClaw
+- Store token in 1Password vault as "Todoist API Token" (field: credential)
 
 ## Local Development Aliases
 

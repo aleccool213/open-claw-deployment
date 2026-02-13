@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # oc-configure.sh — Run on VPS as deploy user
-# Covers: OpenCode Zen, Telegram, 1Password CLI, Himalaya Email (all REQUIRED), Notion (optional)
+# Covers: OpenCode Zen, Telegram, 1Password CLI, Himalaya Email (all REQUIRED), Notion, Todoist (optional)
 # Usage: ssh deploy@<VPS_IP> 'bash -s' < oc-configure.sh
 #    or: scp oc-configure.sh deploy@<VPS_IP>:~ && ssh deploy@<VPS_IP> bash oc-configure.sh
 set -euo pipefail
@@ -78,6 +78,7 @@ echo "  │    5. Tailscale (secure network access)      │"
 echo "  │                                              │"
 echo "  │  OPTIONAL:                                   │"
 echo "  │    6. Notion API (document management)       │"
+echo "  │    7. Todoist (task tracking)                │"
 echo "  └──────────────────────────────────────────────┘"
 echo -e "${NC}"
 
@@ -85,7 +86,7 @@ echo -e "${NC}"
 # 1. OPENCODE ZEN (Recommended - Cheaper than OpenCode Zen, free tier available)
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "1/6 — OpenCode Zen API Key"
+step "1/7 — OpenCode Zen API Key"
 info "Sign up at: https://opencode.ai/zen"
   info "Free models during beta: Grok Code Fast 1, GLM 4.7, MiniMax M2.1"
 
@@ -115,7 +116,7 @@ fi
 # 2. TELEGRAM (REQUIRED)
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "2/6 — Telegram Bot Token (REQUIRED)"
+step "2/7 — Telegram Bot Token (REQUIRED)"
 info "Create a bot: open Telegram → @BotFather → /newbot"
 info "Copy the HTTP API token it gives you"
 
@@ -141,7 +142,7 @@ fi
 # 3. 1PASSWORD CLI (SERVICE ACCOUNT) - REQUIRED
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "3/6 — 1Password CLI (REQUIRED)"
+step "3/7 — 1Password CLI (REQUIRED)"
 info "Requires a Service Account token from 1password.com"
 info "Create at: 1password.com → Developer → Service Accounts"
 info "Grant access to your 'OpenClaw' vault"
@@ -181,7 +182,7 @@ fi
 # 4. EMAIL (HIMALAYA) - REQUIRED
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "4/6 — Email (Himalaya CLI) (REQUIRED)"
+step "4/7 — Email (Himalaya CLI) (REQUIRED)"
 info "Himalaya is a terminal email client for IMAP/SMTP"
 info "You'll need: Gmail/Fastmail account with App Password"
 
@@ -290,7 +291,7 @@ fi
 # 5. TAILSCALE (REQUIRED)
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "5/6 — Tailscale (REQUIRED for secure access)"
+step "5/7 — Tailscale (REQUIRED for secure access)"
 info "Tailscale provides secure zero-trust network access to your OpenClaw gateway"
 info "No need to expose ports or manage SSH tunnels"
 
@@ -363,7 +364,7 @@ fi
 # 6. NOTION (OPTIONAL)
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "6/6 — Notion API (OPTIONAL)"
+step "6/7 — Notion API (OPTIONAL)"
 info "Create an integration at: https://notion.so/my-integrations"
 info "Then share your target pages with the integration"
 info "Press Enter to skip if you don't use Notion"
@@ -395,6 +396,39 @@ if [[ -n "${NOTION_API_KEY:-}" ]]; then
     ok "Notion connected as: ${NOTION_USER}"
   else
     warn "Notion API key invalid (optional, continuing)"
+  fi
+fi
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 7. TODOIST (OPTIONAL)
+# ═════════════════════════════════════════════════════════════════════════════
+
+step "7/7 — Todoist API (OPTIONAL — task tracking)"
+info "Get your API token at: https://todoist.com/prefs/integrations (under 'Developer')"
+info "Press Enter to skip if you don't use Todoist"
+
+TODOIST_API_KEY="${TODOIST_API_KEY:-}"
+if [[ -n "$TODOIST_API_KEY" ]]; then
+  ok "Todoist key already in .env"
+else
+  if prompt_secret "Todoist API token (optional)" "TODOIST_API_KEY" ""; then
+    echo "TODOIST_API_KEY=${TODOIST_API_KEY}" >> "$ENV_FILE"
+    ok "Saved to .env"
+  else
+    warn "Todoist skipped"
+  fi
+fi
+
+# Verify if provided
+if [[ -n "${TODOIST_API_KEY:-}" ]]; then
+  TODOIST_SYNC=$(curl -sf https://api.todoist.com/rest/v2/projects \
+    -H "Authorization: Bearer ${TODOIST_API_KEY}" \
+    | jq -r '.[0].name // empty' 2>/dev/null || true)
+  if [[ -n "$TODOIST_SYNC" ]]; then
+    ok "Todoist connected — first project: ${TODOIST_SYNC}"
+  else
+    warn "Todoist API token invalid (optional, continuing)"
   fi
 fi
 
@@ -489,6 +523,13 @@ if [[ -n "${NOTION_API_KEY:-}" ]]; then
   printf "  %-20s ${GREEN}%s${NC}\n" "Notion" "✅ Connected as ${NOTION_USER:-unknown}"
 else
   printf "  %-20s ${YELLOW}%s${NC}\n" "Notion" "⏭  Skipped"
+fi
+
+# Todoist (optional)
+if [[ -n "${TODOIST_API_KEY:-}" ]]; then
+  printf "  %-20s ${GREEN}%s${NC}\n" "Todoist" "✅ Connected"
+else
+  printf "  %-20s ${YELLOW}%s${NC}\n" "Todoist" "⏭  Skipped"
 fi
 
 echo ""

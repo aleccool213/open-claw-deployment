@@ -15,112 +15,19 @@ on:
       - 'tests/**'
 
 jobs:
-  shellcheck:
-    name: Run ShellCheck
+  lint-and-test:
+    name: Lint & Test
     runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Run ShellCheck
-        uses: ludeeus/action-shellcheck@master
-        with:
-          severity: warning
-          check_together: 'yes'
-        env:
-          SHELLCHECK_OPTS: --exclude=SC1090,SC1091
 
-  syntax-check:
-    name: Syntax Check
-    runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: Check bash syntax
-        run: |
-          bash -n oc-provision.sh
-          bash -n oc-bootstrap.sh
-          bash -n oc-configure.sh
-          bash -n oc-load-secrets.sh
-          bash -n lint-scripts.sh
-          echo "✅ All scripts have valid syntax"
 
-  permissions-check:
-    name: Check Executable Permissions
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Verify scripts are executable
-        run: |
-          test -x oc-provision.sh || (echo "❌ oc-provision.sh is not executable" && exit 1)
-          test -x oc-bootstrap.sh || (echo "❌ oc-bootstrap.sh is not executable" && exit 1)
-          test -x oc-configure.sh || (echo "❌ oc-configure.sh is not executable" && exit 1)
-          test -x oc-load-secrets.sh || (echo "❌ oc-load-secrets.sh is not executable" && exit 1)
-          test -x lint-scripts.sh || (echo "❌ lint-scripts.sh is not executable" && exit 1)
-          echo "✅ All scripts are executable"
-
-  bats-tests:
-    name: Bats Tests
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
       - name: Install Bats
         run: |
           git clone https://github.com/bats-core/bats-core.git /tmp/bats
           cd /tmp/bats
           sudo ./install.sh /usr/local
-      
-      - name: Run Bats tests
-        run: bats tests/*.bats
 
-  integration-checks:
-    name: Integration Checks
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Check for common issues
-        run: |
-          # Check for hardcoded secrets (basic patterns)
-          matches=$(grep -r "password.*=" oc-*.sh | grep -v "read.*password\|PASSWORD.*read\|example\|# " || true)
-          if [ -n "$matches" ]; then
-            echo "⚠️  Warning: Possible hardcoded password detected"
-            echo "$matches"
-            exit 1
-          fi
-          echo "✅ No hardcoded passwords found"
-          
-          # Check for TODO/FIXME markers
-          if grep -rn "TODO\|FIXME\|XXX" oc-*.sh | grep -v "# TODO:\|# FIXME:\|Check for TODO"; then
-            echo "⚠️  Warning: Found TODO/FIXME markers"
-            exit 1
-          fi
-          
-          # Check for proper shebang
-          for script in oc-*.sh lint-scripts.sh; do
-            if ! head -1 "$script" | grep -q "^#!/usr/bin/env bash"; then
-              echo "❌ $script missing proper shebang"
-              exit 1
-            fi
-          done
-          
-          # Check for set -euo pipefail
-          for script in oc-*.sh lint-scripts.sh; do
-            if ! grep -q "set -euo pipefail" "$script"; then
-              echo "❌ $script missing 'set -euo pipefail'"
-              exit 1
-            fi
-          done
-          
-          echo "✅ Integration checks passed"
+      - name: Run lint-scripts.sh
+        run: ./lint-scripts.sh

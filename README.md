@@ -157,7 +157,11 @@ The threat model is simple: prevent unauthorized access, protect secrets, keep s
 │  - Telegram bot │────▶│  Telegram API   │
 │  - Email (SMTP) │     └─────────────────┘
 │  - Notion API   │
-└─────────────────┘     ┌─────────────────┐
+│  - Todoist API  │     ┌─────────────────┐
+└─────────────────┘     │  Todoist        │
+                        │  (task tracking)│
+                        └─────────────────┘
+                        ┌─────────────────┐
                         │  Gmail/Fastmail │
                         │  (IMAP/SMTP)    │
                         └─────────────────┘
@@ -212,6 +216,11 @@ To create a reusable Tailscale auth key:
    - Only needed if you use Notion
    - Can skip during setup and add later
 
+7. **Todoist API token** ([get token](https://todoist.com/prefs/integrations))
+   - Lets OpenClaw create, update, and track tasks in Todoist
+   - Only needed if you use Todoist for task management
+   - Can skip during setup and add later
+
 ## 1Password Integration (Optional but Worth It)
 
 If you're like me and have dozens of API keys, manually typing them during setup gets old. The `oc-load-secrets.sh` script pulls everything from 1Password automatically.
@@ -222,12 +231,16 @@ If you're like me and have dozens of API keys, manually typing them during setup
    - You can use a different name by setting `OP_VAULT` environment variable
 
 2. **Add these items** to your vault (exact names matter):
-   - **"OpenCode Zen API Key"** — Add field called `credential`
-   - **"Telegram Bot Token"** — Add field called `credential`
-   - **"1Password Service Account"** — Add field called `credential`
-   - **"Tailscale Auth Key"** — Add field called `credential`
-   - **"Notion API Key"** — Add field called `credential` (optional)
-   - **"Email App Password"** — Add field called `password`
+
+   | 1Password Item Name | Field | Required | Where to Get It |
+   |---------------------|-------|----------|-----------------|
+   | OpenCode Zen API Key | `credential` | Yes | [opencode.ai/zen](https://opencode.ai/zen) — sign up, copy API key from dashboard |
+   | Telegram Bot Token | `credential` | Yes | Open Telegram → [@BotFather](https://t.me/botfather) → `/newbot` → copy HTTP API token |
+   | 1Password Service Account | `credential` | Yes | [1password.com](https://1password.com) → Developer → Service Accounts → grant access to "OpenClaw" vault |
+   | Tailscale Auth Key | `credential` | Yes | [login.tailscale.com/admin/settings/keys](https://login.tailscale.com/admin/settings/keys) → Generate auth key (enable "Reusable") |
+   | Email App Password | `password` | Yes | Gmail: [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) / Fastmail: Settings → Privacy & Security → App Passwords |
+   | Notion API Key | `credential` | No | [notion.so/my-integrations](https://www.notion.so/my-integrations) → Create integration → copy Internal Integration Secret |
+   | Todoist API Token | `credential` | No | [todoist.com/prefs/integrations](https://todoist.com/prefs/integrations) → Developer → copy API token |
 
 3. **Install 1Password CLI** — [Download here](https://developer.1password.com/docs/cli/get-started/)
 
