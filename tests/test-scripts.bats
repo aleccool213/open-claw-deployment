@@ -120,6 +120,36 @@ setup() {
     grep -q "TODOIST_API_KEY" "${SCRIPT_DIR}/oc-configure.sh"
 }
 
+# ── oc-load-secrets.sh Specific Tests ────────────────────────────────────────
+
+@test "load secrets script has check_sourced function" {
+    grep -q "check_sourced()" "${SCRIPT_DIR}/oc-load-secrets.sh"
+}
+
+@test "load secrets script documents zsh compatibility" {
+    grep -q "Or in zsh" "${SCRIPT_DIR}/oc-load-secrets.sh"
+    grep -q "Zsh:" "${SCRIPT_DIR}/oc-load-secrets.sh"
+}
+
+@test "load secrets script handles case-insensitive items" {
+    grep -q "case-insensitive" "${SCRIPT_DIR}/oc-load-secrets.sh"
+    grep -q "item_names=" "${SCRIPT_DIR}/oc-load-secrets.sh"
+}
+
+@test "load secrets script uses --reveal flag" {
+    grep -q "\-\-reveal" "${SCRIPT_DIR}/oc-load-secrets.sh"
+}
+
+@test "load secrets script validates secrets" {
+    grep -q "Validating secrets" "${SCRIPT_DIR}/oc-load-secrets.sh"
+    grep -q "opencode.ai/zen" "${SCRIPT_DIR}/oc-load-secrets.sh"
+    grep -q "telegram.org" "${SCRIPT_DIR}/oc-load-secrets.sh"
+}
+
+@test "load secrets script documents Telegram bug workaround" {
+    grep -q "Telegram Bug Workaround" "${SCRIPT_DIR}/oc-load-secrets.sh"
+}
+
 # ── Security Tests ────────────────────────────────────────────────────────────
 
 @test "scripts do not contain hardcoded secrets (basic check)" {
