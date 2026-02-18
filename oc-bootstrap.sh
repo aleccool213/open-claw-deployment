@@ -61,7 +61,12 @@ verify "Docker Compose installed"  "docker compose version"
 # PHASE 2: OPENCLAW
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "2/9 — Cloning OpenClaw"
+# IMPORTANT: Pin to v2026.2.6 (v2026.2.9 has Telegram bug where polling never starts)
+# See: https://github.com/openclaw/openclaw/issues/15082
+OPENCLAW_VERSION="v2026.2.6"
+OPENCLAW_IMAGE="openclaw:${OPENCLAW_VERSION}"
+
+step "2/9 — Building OpenClaw ${OPENCLAW_VERSION}"
 DEPLOY_HOME="/home/deploy"
 OPENCLAW_DIR="${DEPLOY_HOME}/openclaw"
 OPENCLAW_DATA="${DEPLOY_HOME}/.openclaw"
@@ -87,19 +92,21 @@ chmod 700 "${DEPLOY_HOME}/.ssh"
 chmod 600 "${DEPLOY_HOME}/.ssh/authorized_keys" 2>/dev/null || true
 ok "SSH keys copied to deploy user"
 
-# Give deploy passwordless sudo (needed for setup, can remove later)
-echo "deploy ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/deploy
-chmod 440 /etc/sudoers.d/deploy
-
-# Clone repo
+# Download and build pinned version from source
 if [[ -d "$OPENCLAW_DIR" ]]; then
-  warn "OpenClaw already cloned at ${OPENCLAW_DIR}, pulling latest"
-  su - deploy -c "cd ${OPENCLAW_DIR} && git pull --ff-only" || true
+  warn "OpenClaw already exists at ${OPENCLAW_DIR}, checking version..."
 else
-  su - deploy -c "git clone https://github.com/openclaw/openclaw.git ${OPENCLAW_DIR}"
+  echo "  Downloading OpenClaw ${OPENCLAW_VERSION} source..."
+  cd /tmp
+  curl -sL "https://github.com/openclaw/openclaw/archive/refs/tags/${OPENCLAW_VERSION}.tar.gz" -o openclaw.tar.gz
+  tar xzf openclaw.tar.gz
+  mv "openclaw-${OPENCLAW_VERSION#v}" "$OPENCLAW_DIR"
+  rm -f openclaw.tar.gz
+  chown -R deploy:deploy "$OPENCLAW_DIR"
+  ok "Downloaded OpenClaw ${OPENCLAW_VERSION}"
 fi
 
-verify "Repo cloned" "test -f ${OPENCLAW_DIR}/docker-compose.yml"
+verify "Source directory exists" "test -f ${OPENCLAW_DIR}/docker-compose.yml"
 
 step "3/9 — Persistent directories & secrets"
 
@@ -115,7 +122,9 @@ else
   KEYRING_PASSWORD=$(openssl rand -hex 32)
 
   cat > "$ENV_FILE" <<EOF
-OPENCLAW_IMAGE=openclaw:latest
+# IMPORTANT: Use v2026.2.6 (v2026.2.9 has Telegram bug - polling never starts)
+# See: https://github.com/openclaw/openclaw/issues/15082
+OPENCLAW_IMAGE=${OPENCLAW_IMAGE}
 OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}
 OPENCLAW_GATEWAY_BIND=lan
 OPENCLAW_GATEWAY_PORT=18789
@@ -141,30 +150,113 @@ fi
 verify ".env exists and is restricted" "test -f $ENV_FILE && stat -c '%a' $ENV_FILE | grep -q '600'"
 verify "Data dir writable by node user" "test -d ${OPENCLAW_DATA}/workspace"
 
+# Write openclaw.json with correct OpenCode Zen configuration
+# This config includes models.providers with baseUrl for OpenCode Zen
+CONFIG_FILE="${OPENCLAW_DATA}/openclaw.json"
+if [[ -f "$CONFIG_FILE" ]]; then
+  warn "Config already exists at ${CONFIG_FILE}, not overwriting"
+else
+  cat > "$CONFIG_FILE" << 'OPENCLAW_CONFIG'
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "opencode/kimi-k2.5",
+        "fallbacks": ["opencode/glm-4.7"]
+      },
+      "models": {
+        "opencode/kimi-k2.5": { "alias": "kimi" },
+        "opencode/kimi-k2.5-free": { "alias": "kimi-free" },
+        "opencode/glm-4.7": { "alias": "glm4" },
+        "opencode/glm-5-free": { "alias": "glm5" },
+        "opencode/claude-sonnet-4-5": { "alias": "sonnet" },
+        "opencode/claude-opus-4-6": { "alias": "opus" },
+        "opencode/gemini-3-flash": { "alias": "flash" },
+        "opencode/gpt-5.1-codex": { "alias": "codex" }
+      },
+      "heartbeat": {
+        "every": "2h",
+        "model": "opencode/glm-4.7",
+        "target": "last"
+      },
+      "subagents": {
+        "model": "opencode/kimi-k2.5",
+        "maxConcurrent": 1,
+        "archiveAfterMinutes": 60
+      },
+      "imageModel": {
+        "primary": "opencode/gemini-3-flash",
+        "fallbacks": ["opencode/glm-4.7"]
+      },
+      "contextTokens": 131072,
+      "maxConcurrent": 4
+    }
+  },
+  "messages": {
+    "ackReactionScope": "group-mentions"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto"
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "groupPolicy": "allowlist",
+      "streamMode": "partial"
+    }
+  },
+  "gateway": {
+    "controlUi": {
+      "allowInsecureAuth": true
+    },
+    "trustedProxies": ["100.64.0.0/10"]
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "opencode": {
+        "baseUrl": "https://opencode.ai/zen/v1",
+        "apiKey": "${OPENCODE_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          { "id": "kimi-k2.5", "name": "Kimi K2.5" },
+          { "id": "kimi-k2.5-free", "name": "Kimi K2.5 Free" },
+          { "id": "glm-4.7", "name": "GLM 4.7" },
+          { "id": "glm-5-free", "name": "GLM 5 Free" },
+          { "id": "claude-sonnet-4-5", "name": "Claude Sonnet 4.5" },
+          { "id": "claude-opus-4-6", "name": "Claude Opus 4.6" },
+          { "id": "gemini-3-flash", "name": "Gemini 3 Flash" },
+          { "id": "gpt-5.1-codex", "name": "GPT 5.1 Codex" },
+          { "id": "big-pickle", "name": "Big Pickle" },
+          { "id": "minimax-m2.1-free", "name": "MiniMax M2.1 Free" }
+        ]
+      }
+    }
+  },
+  "env": {
+    "OPENCODE_API_KEY": "SET_THIS_IN_ENV_FILE_OR_HERE"
+  }
+}
+OPENCLAW_CONFIG
+  chown 1000:1000 "$CONFIG_FILE"
+  chmod 600 "$CONFIG_FILE"
+  ok "Wrote OpenClaw config with OpenCode Zen provider setup"
+  info "You'll set OPENCODE_API_KEY in oc-configure.sh"
+fi
+
 step "4/9 — Building & launching gateway"
 cd "$OPENCLAW_DIR"
 
-# Check if we should pull or build
-if [[ "$OPENCLAW_IMAGE" == "openclaw:latest" ]]; then
-  echo "  Image set to local build (openclaw:latest)."
-  # Only build if it doesn't exist locally to save time
-  if [[ "$(docker images -q openclaw:latest 2> /dev/null)" == "" ]]; then
-    echo "  Building image locally with BuildKit caching..."
-    export DOCKER_BUILDKIT=1
-    docker build \
-      --build-arg BUILDKIT_INLINE_CACHE=1 \
-      --cache-from openclaw:latest \
-      -t openclaw:latest .
-  else
-    ok "Image openclaw:latest already exists, skipping build"
-    info "To force a rebuild, run: docker rmi openclaw:latest"
-  fi
-else
-  echo "  Custom image detected: $OPENCLAW_IMAGE"
-  echo "  Pulling image..."
-  docker pull "$OPENCLAW_IMAGE"
-  ok "Image pulled successfully"
-fi
+# Build from source (pinned version)
+echo "  Building OpenClaw ${OPENCLAW_VERSION} from source..."
+echo "  This may take a few minutes on first run..."
+export DOCKER_BUILDKIT=1
+docker build \
+  --build-arg BUILDKIT_INLINE_CACHE=1 \
+  -t "${OPENCLAW_IMAGE}" .
+ok "Built ${OPENCLAW_IMAGE}"
 
 docker compose up -d openclaw-gateway
 sleep 5

@@ -29,8 +29,16 @@
         "primary": "opencode/gemini-3-flash",
         "fallbacks": ["opencode/glm-4.7"]
       },
-      "contextTokens": 131072
+      "contextTokens": 131072,
+      "maxConcurrent": 4
     }
+  },
+  "messages": {
+    "ackReactionScope": "group-mentions"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto"
   },
   "channels": {
     "telegram": {
@@ -46,7 +54,29 @@
     },
     "trustedProxies": ["100.64.0.0/10"]
   },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "opencode": {
+        "baseUrl": "https://opencode.ai/zen/v1",
+        "apiKey": "${OPENCODE_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          { "id": "kimi-k2.5", "name": "Kimi K2.5" },
+          { "id": "kimi-k2.5-free", "name": "Kimi K2.5 Free" },
+          { "id": "glm-4.7", "name": "GLM 4.7" },
+          { "id": "glm-5-free", "name": "GLM 5 Free" },
+          { "id": "claude-sonnet-4-5", "name": "Claude Sonnet 4.5" },
+          { "id": "claude-opus-4-6", "name": "Claude Opus 4.6" },
+          { "id": "gemini-3-flash", "name": "Gemini 3 Flash" },
+          { "id": "gpt-5.1-codex", "name": "GPT 5.1 Codex" },
+          { "id": "big-pickle", "name": "Big Pickle" },
+          { "id": "minimax-m2.1-free", "name": "MiniMax M2.1 Free" }
+        ]
+      }
+    }
+  },
   "env": {
-    "OPENCODE_API_KEY": "YOUR_OPENCODE_ZEN_API_KEY_HERE"
+    "OPENCODE_API_KEY": "YOUR_OPENCODE_API_KEY_HERE"
   }
 }
