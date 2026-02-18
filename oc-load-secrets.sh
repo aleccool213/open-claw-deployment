@@ -4,13 +4,33 @@
 #
 # DESCRIPTION:
 #   This optional script fetches secrets from 1Password CLI and exports them as
-#   environment variables, allowing you to run oc-configure.sh non-interactively
-#   with pre-populated credentials from your 1Password vault.
+#   environment variables. It can be run either locally or on the VPS.
 #
 # USAGE:
-#   source ./oc-load-secrets.sh
-#   # Or in zsh: . ./oc-load-secrets.sh
-#   # Then run oc-configure.sh which will use the exported environment variables
+#
+#   Option 1: Run locally, then copy to VPS
+#     # On your local machine:
+#     source ./oc-load-secrets.sh
+#     
+#     # Create .env file and copy to VPS:
+#     cat > .env << EOF
+#     OPENCODE_API_KEY=$OPENCODE_API_KEY
+#     TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
+#     OP_SERVICE_ACCOUNT_TOKEN=$OP_SERVICE_ACCOUNT_TOKEN
+#     TAILSCALE_AUTH_KEY=$TAILSCALE_AUTH_KEY
+#     NOTION_API_KEY=${NOTION_API_KEY:-}
+#     TODOIST_API_KEY=${TODOIST_API_KEY:-}
+#     EMAIL_APP_PASSWORD=${EMAIL_APP_PASSWORD:-}
+#     EOF
+#     scp .env deploy@<VPS_IP>:~/openclaw/.env
+#
+#   Option 2: Run directly on VPS (RECOMMENDED)
+#     # After bootstrap, copy script to VPS:
+#     scp oc-load-secrets.sh deploy@<VPS_IP>:~/
+#     
+#     # SSH to VPS and run:
+#     ssh deploy@<VPS_IP>
+#     source ~/oc-load-secrets.sh
 #
 # PREREQUISITES:
 #   - 1Password CLI (op) installed and configured

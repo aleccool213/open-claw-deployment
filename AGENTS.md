@@ -14,13 +14,69 @@ Heartbeats are periodic check-ins OpenClaw does to maintain context and keep the
 |------|---------|
 | Provision VPS | `hcloud server create --name openclaw --type cx22 --image ubuntu-24.04 --location fsn1 --ssh-key openclaw-key` |
 | Bootstrap (root) | `ssh root@<IP> 'bash -s' < oc-bootstrap.sh` |
-| Load secrets (optional) | `source ./oc-load-secrets.sh` |
+| Copy secrets script | `scp oc-load-secrets.sh deploy@<IP>:~/` |
+| Load secrets (on VPS) | `ssh deploy@<IP> "source ~/oc-load-secrets.sh"` |
 | Configure (deploy) | `ssh deploy@<IP> 'bash -s' < oc-configure.sh` |
 | SSH to VPS | `ssh deploy@$(hcloud server ip openclaw)` |
 | Open tunnel | `ssh -N -L 18789:127.0.0.1:18789 deploy@<IP>` |
 | View logs | `ssh deploy@<IP> "cd ~/openclaw && docker compose logs -f openclaw-gateway"` |
 | Restart gateway | `ssh deploy@<IP> "cd ~/openclaw && docker compose restart openclaw-gateway"` |
 | Trigger backup | `sudo /usr/local/bin/openclaw-backup.sh` |
+| Run health check | `ssh deploy@<IP> "~/openclaw/monitor.sh"` |
+| View monitor logs | `ssh deploy@<IP> "tail -f /var/log/openclaw-monitor.log"` |
+
+## Deployment Workflow
+
+### Recommended Order
+
+1. **Provision VPS** (one-time)
+   ```bash
+   hcloud server create --name openclaw --type cx22 --image ubuntu-24.04 --location fsn1 --ssh-key openclaw-key
+   ```
+
+2. **Bootstrap** (run as root on fresh VPS)
+   ```bash
+   ssh root@<IP> 'bash -s' < oc-bootstrap.sh
+   ```
+   This installs Docker, creates deploy user, builds OpenClaw v2026.2.6, and sets up security.
+
+3. **Load Secrets** (run on VPS as deploy user)
+   ```bash
+   # First, copy the script to VPS
+   scp oc-load-secrets.sh deploy@<IP>:~/
+   
+   # Then SSH in and run it
+   ssh deploy@<IP>
+   source ~/oc-load-secrets.sh
+   ```
+
+4. **Configure** (run on VPS)
+   ```bash
+   # Still on VPS from step 3, or:
+   ssh deploy@<IP> 'bash -s' < oc-configure.sh
+   ```
+
+### Alternative: Load Secrets Locally First
+
+If you prefer to run `oc-load-secrets.sh` on your local machine:
+
+```bash
+# On local machine
+source ./oc-load-secrets.sh
+
+# Create .env file with loaded secrets
+cat > .env << EOF
+OPENCODE_API_KEY=$OPENCODE_API_KEY
+TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
+OP_SERVICE_ACCOUNT_TOKEN=$OP_SERVICE_ACCOUNT_TOKEN
+TAILSCALE_AUTH_KEY=$TAILSCALE_AUTH_KEY
+EOF
+
+# Copy to VPS
+scp .env deploy@<IP>:~/openclaw/.env
+```
+
+**Note**: Running on the VPS is recommended because the secrets are immediately available without manual copying.
 
 ## Repository Structure
 
@@ -29,9 +85,9 @@ Heartbeats are periodic check-ins OpenClaw does to maintain context and keep the
 ├── oc-bootstrap.sh              # Run once as root on fresh VPS
 ├── oc-configure.sh              # Run as deploy user to configure integrations
 ├── oc-load-secrets.sh           # (Optional) Load secrets from 1Password CLI
+├── monitor.sh                   # Health monitoring (cron every 5 min)
 ├── openclaw.json.example        # OpenClaw configuration template (OpenCode Zen)
-├── openclaw-hetzner-checklist.md # Complete deployment checklist
-└── oc-scripts.zip               # Original archive (extracted above)
+└── openclaw-hetzner-checklist.md # Complete deployment checklist
 ```
 
 ## Deployment Architecture
@@ -255,6 +311,38 @@ Before considering deployment complete:
 - [ ] Container running as non-root (UID 1000)
 - [ ] Automated backups tested manually
 - [ ] Can SSH as deploy user from second terminal
+- [ ] Health monitoring cron job configured
+
+## Health Monitoring
+
+The `monitor.sh` script runs every 5 minutes via cron and checks:
+- Gateway container status
+- HTTP response from gateway
+- Heartbeat within last 3 hours
+
+### What it does:
+- **Auto-restarts** gateway if it's down
+- **Sends Telegram alerts** to your paired chat if issues detected
+- **Logs** to `/var/log/openclaw-monitor.log`
+
+### Manual commands:
+```bash
+# Run health check manually
+ssh deploy@<IP> "~/openclaw/monitor.sh"
+
+# View monitor logs
+ssh deploy@<IP> "tail -f /var/log/openclaw-monitor.log"
+
+# Check cron job
+ssh deploy@<IP> "crontab -l"
+```
+
+### Troubleshooting
+
+If monitoring isn't working:
+1. Check cron is running: `ssh deploy@<IP> "crontab -l"`
+2. Check log file exists: `ssh deploy@<IP> "ls -la /var/log/openclaw-monitor.log"`
+3. Run manually to debug: `ssh deploy@<IP> "bash -x ~/openclaw/monitor.sh"`
 
 ## Troubleshooting
 
