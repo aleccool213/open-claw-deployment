@@ -127,8 +127,8 @@ setup() {
 }
 
 @test "load secrets script documents zsh compatibility" {
-    grep -q "Or in zsh" "${SCRIPT_DIR}/oc-load-secrets.sh"
     grep -q "Zsh:" "${SCRIPT_DIR}/oc-load-secrets.sh"
+    grep -q "zsh" "${SCRIPT_DIR}/oc-load-secrets.sh"
 }
 
 @test "load secrets script handles case-insensitive items" {

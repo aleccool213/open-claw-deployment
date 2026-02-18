@@ -14,13 +14,69 @@ Heartbeats are periodic check-ins OpenClaw does to maintain context and keep the
 |------|---------|
 | Provision VPS | `hcloud server create --name openclaw --type cx22 --image ubuntu-24.04 --location fsn1 --ssh-key openclaw-key` |
 | Bootstrap (root) | `ssh root@<IP> 'bash -s' < oc-bootstrap.sh` |
-| Load secrets (optional) | `source ./oc-load-secrets.sh` |
+| Copy secrets script | `scp oc-load-secrets.sh deploy@<IP>:~/` |
+| Load secrets (on VPS) | `ssh deploy@<IP> "source ~/oc-load-secrets.sh"` |
 | Configure (deploy) | `ssh deploy@<IP> 'bash -s' < oc-configure.sh` |
 | SSH to VPS | `ssh deploy@$(hcloud server ip openclaw)` |
 | Open tunnel | `ssh -N -L 18789:127.0.0.1:18789 deploy@<IP>` |
 | View logs | `ssh deploy@<IP> "cd ~/openclaw && docker compose logs -f openclaw-gateway"` |
 | Restart gateway | `ssh deploy@<IP> "cd ~/openclaw && docker compose restart openclaw-gateway"` |
 | Trigger backup | `sudo /usr/local/bin/openclaw-backup.sh` |
+| Run health check | `ssh deploy@<IP> "~/openclaw/monitor.sh"` |
+| View monitor logs | `ssh deploy@<IP> "tail -f /var/log/openclaw-monitor.log"` |
+
+## Deployment Workflow
+
+### Recommended Order
+
+1. **Provision VPS** (one-time)
+   ```bash
+   hcloud server create --name openclaw --type cx22 --image ubuntu-24.04 --location fsn1 --ssh-key openclaw-key
+   ```
+
+2. **Bootstrap** (run as root on fresh VPS)
+   ```bash
+   ssh root@<IP> 'bash -s' < oc-bootstrap.sh
+   ```
+   This installs Docker, creates deploy user, builds OpenClaw v2026.2.6, and sets up security.
+
+3. **Load Secrets** (run on VPS as deploy user)
+   ```bash
+   # First, copy the script to VPS
+   scp oc-load-secrets.sh deploy@<IP>:~/
+   
+   # Then SSH in and run it
+   ssh deploy@<IP>
+   source ~/oc-load-secrets.sh
+   ```
+
+4. **Configure** (run on VPS)
+   ```bash
+   # Still on VPS from step 3, or:
+   ssh deploy@<IP> 'bash -s' < oc-configure.sh
+   ```
+
+### Alternative: Load Secrets Locally First
+
+If you prefer to run `oc-load-secrets.sh` on your local machine:
+
+```bash
+# On local machine
+source ./oc-load-secrets.sh
+
+# Create .env file with loaded secrets
+cat > .env << EOF
+OPENCODE_API_KEY=$OPENCODE_API_KEY
+TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
+OP_SERVICE_ACCOUNT_TOKEN=$OP_SERVICE_ACCOUNT_TOKEN
+TAILSCALE_AUTH_KEY=$TAILSCALE_AUTH_KEY
+EOF
+
+# Copy to VPS
+scp .env deploy@<IP>:~/openclaw/.env
+```
+
+**Note**: Running on the VPS is recommended because the secrets are immediately available without manual copying.
 
 ## Repository Structure
 
@@ -29,9 +85,9 @@ Heartbeats are periodic check-ins OpenClaw does to maintain context and keep the
 ├── oc-bootstrap.sh              # Run once as root on fresh VPS
 ├── oc-configure.sh              # Run as deploy user to configure integrations
 ├── oc-load-secrets.sh           # (Optional) Load secrets from 1Password CLI
+├── monitor.sh                   # Health monitoring (cron every 5 min)
 ├── openclaw.json.example        # OpenClaw configuration template (OpenCode Zen)
-├── openclaw-hetzner-checklist.md # Complete deployment checklist
-└── oc-scripts.zip               # Original archive (extracted above)
+└── openclaw-hetzner-checklist.md # Complete deployment checklist
 ```
 
 ## Deployment Architecture
@@ -59,7 +115,7 @@ All durable state lives on the host, not in containers:
 ### Environment Variables (.env)
 Located at `/home/deploy/openclaw/.env`:
 ```bash
-OPENCLAW_IMAGE=openclaw:latest
+OPENCLAW_IMAGE=openclaw:v2026.2.6  # Use v2026.2.6 (v2026.2.9 has Telegram bug)
 OPENCLAW_GATEWAY_TOKEN=<32-byte-hex>  # Save this! Used for web UI auth
 OPENCLAW_GATEWAY_BIND=lan
 OPENCLAW_GATEWAY_PORT=18789
@@ -69,9 +125,10 @@ GOG_KEYRING_PASSWORD=<32-byte-hex>
 XDG_CONFIG_HOME=/home/node/.openclaw
 
 # Added by oc-configure.sh (REQUIRED):
-OPENCODE_ZEN_API_KEY=ocz_...
+OPENCODE_API_KEY=sk-...  # OpenCode Zen API key
 TELEGRAM_BOT_TOKEN=123456:ABC-...
 OP_SERVICE_ACCOUNT_TOKEN=ops_eyJ...
+TAILSCALE_AUTH_KEY=tskey-auth-...
 
 # Optional:
 NOTION_API_KEY=ntn_...
@@ -81,26 +138,38 @@ TODOIST_API_KEY=...
 ### OpenClaw Config (openclaw.json)
 Located at `/home/deploy/.openclaw/openclaw.json`:
 - **Provider**: OpenCode Zen (free tier available)
-- Primary model: Grok Code Fast 1 (FREE during beta) or GLM 4.7 (FREE)
+- Primary model: `opencode/kimi-k2.5` (recommended)
+- Fallback model: `opencode/glm-4.7` (FREE)
 - Heartbeat: Every **2 hours** (reduced from 30min to save costs)
-- Model aliases: `grok`, `glm4`, `grokcode`, `flash`, `ds`
 
 ## Integration Details
 
 ### 1. OpenCode Zen (Required)
-- Sign up: https://opencode.ai/zen (create account, add $20 balance)
-- **FREE models** (during beta): Grok Code Fast 1, GLM 4.7, MiniMax M2.1, Big Pickle
-- Curated models optimized for coding agents
-- Pay-as-you-go: $20 minimum, auto-top-up at $5
-- Get API key from dashboard and add to `.env`:
-  ```bash
-  OPENCODE_ZEN_API_KEY=ocz_...
-  ```
+
+OpenCode Zen provides curated models optimized for coding agents.
+
+**Sign up**: https://opencode.ai/zen (create account, add $20 balance)
+
+**Available Models** (use `opencode/` prefix):
+| Model | Alias | Notes |
+|-------|-------|-------|
+| `opencode/kimi-k2.5` | kimi | Recommended primary model |
+| `opencode/kimi-k2.5-free` | kimi-free | FREE tier |
+| `opencode/glm-4.7` | glm4 | FREE, good fallback |
+| `opencode/glm-5-free` | glm5 | FREE |
+| `opencode/claude-sonnet-4-5` | sonnet | Paid |
+| `opencode/claude-opus-4-6` | opus | Paid, best for complex tasks |
+| `opencode/gemini-3-flash` | flash | Good for images |
+| `opencode/gpt-5.1-codex` | codex | Great for coding |
+| `opencode/minimax-m2.1-free` | - | FREE |
+| `opencode/big-pickle` | - | FREE |
+
+**IMPORTANT**: The model format is `opencode/<model>`, NOT `zen/x-ai/<model>`. Grok models are NOT available in OpenCode Zen.
 
 ### 2. Telegram Bot (REQUIRED)
 - Create via @BotFather in Telegram
 - Must be configured (script will fail without it)
-- Pairing required: User sends `/start`, admin approves with pairing code
+- Pairing required: User sends any message, admin approves with pairing code
 - Uses grammY with long-polling (works behind NAT/firewall)
 
 ### 3. 1Password (REQUIRED)
@@ -110,20 +179,20 @@ Located at `/home/deploy/.openclaw/openclaw.json`:
 - Use `op run` or `op inject` to avoid plaintext secrets
 - **Required** for secure secret management (email passwords, API keys)
 
-#### Optional: Pre-load Secrets with oc-load-secrets.sh
+#### Pre-load Secrets with oc-load-secrets.sh
 
 For faster configuration, use the `oc-load-secrets.sh` script to fetch secrets from 1Password before running `oc-configure.sh`:
 
 **Setup:**
-1. Install 1Password CLI: https://developer.1password.com/docs/cli/get-started/
+1. Install 1Password CLI: `brew install --cask 1password-cli` (macOS)
 2. Create a vault named "OpenClaw" (or set `OP_VAULT` env var for custom name)
-3. Add the following items to the vault:
-   - "OpenCode Zen API Key" (field: credential)
-   - "Telegram Bot Token" (field: credential)
-   - "1Password Service Account" (field: credential)
-   - "Notion API Key" (field: credential) — optional
-   - "Todoist API Token" (field: credential) — optional
-   - "Email App Password" (field: password) — used by Himalaya at runtime
+3. Add the following items to the vault (case-insensitive):
+   - "opencode zen api key" (field: credential)
+   - "telegram bot token" (field: credential)
+   - "1password service account" (field: credential)
+   - "tailscale auth key" (field: credential)
+   - "notion api key" (field: credential) — optional
+   - "google service account" (field: app password) — for email
 4. Authenticate: `op signin` or export `OP_SERVICE_ACCOUNT_TOKEN`
 
 **Usage:**
@@ -135,29 +204,79 @@ source ./oc-load-secrets.sh
 ./oc-configure.sh
 ```
 
-**Benefits:**
-- Skip manual secret entry during configuration
-- Centralized secret storage and rotation
-- Audit trail of secret access
-- Share deployment credentials securely with team
+### 4. Tailscale (REQUIRED for Web UI)
+- Provides secure access to the OpenClaw gateway
+- No need to expose ports or manage SSH tunnels
+- Web UI accessible at: `https://<hostname>.ts.net/?token=<GATEWAY_TOKEN>`
 
-### 4. Email via Himalaya (REQUIRED)
+**Gateway Config for Tailscale:**
+```json
+{
+  "gateway": {
+    "controlUi": { "allowInsecureAuth": true },
+    "trustedProxies": ["100.64.0.0/10"]
+  }
+}
+```
+
+### 5. Email via Himalaya (REQUIRED)
 - CLI email client for IMAP/SMTP
 - Supports Gmail (App Password), Fastmail, Migadu
 - Config: `~/.config/himalaya/config.toml`
 - **Required** for notifications and agent interactions
 - App password stored in 1Password vault for security
 
-### 5. Notion (Optional)
+### 6. Notion (Optional)
 - Create integration at notion.so/my-integrations
 - Must explicitly share each page with the integration
 - API version: 2025-09-03
 
-### 6. Todoist (Optional)
+### 7. Todoist (Optional)
 - Get API token at: https://todoist.com/prefs/integrations (under "Developer")
 - REST API v2: https://api.todoist.com/rest/v2/
 - Enables task tracking and project management via OpenClaw
 - Store token in 1Password vault as "Todoist API Token" (field: credential)
+
+## Known Issues & Workarounds
+
+### Telegram Bug in v2026.2.9
+OpenClaw v2026.2.9 has a bug where Telegram shows "configured, not enabled yet" and never starts polling.
+
+**Workaround**: Use v2026.2.6 (built from source):
+```bash
+cd /tmp
+curl -sL https://github.com/openclaw/openclaw/archive/refs/tags/v2026.2.6.tar.gz -o openclaw.tar.gz
+tar xzf openclaw.tar.gz
+cd openclaw-2026.2.6
+docker build -t openclaw:v2026.2.6 .
+```
+
+Then set `OPENCLAW_IMAGE=openclaw:v2026.2.6` in `.env`.
+
+### Web UI "pairing required" Error
+If you get "disconnected (1008): pairing required", add to config:
+```json
+{
+  "gateway": {
+    "controlUi": { "allowInsecureAuth": true }
+  }
+}
+```
+
+### Web UI "untrusted proxy" Warning
+For Tailscale access, add trusted proxies:
+```json
+{
+  "gateway": {
+    "trustedProxies": ["100.64.0.0/10"]
+  }
+}
+```
+
+### "unknown model" Error
+Ensure model names use correct prefix:
+- ✅ `opencode/kimi-k2.5` (correct)
+- ❌ `zen/x-ai/grok-code-fast-1` (wrong - Grok not in OpenCode Zen)
 
 ## Local Development Aliases
 
@@ -192,6 +311,38 @@ Before considering deployment complete:
 - [ ] Container running as non-root (UID 1000)
 - [ ] Automated backups tested manually
 - [ ] Can SSH as deploy user from second terminal
+- [ ] Health monitoring cron job configured
+
+## Health Monitoring
+
+The `monitor.sh` script runs every 5 minutes via cron and checks:
+- Gateway container status
+- HTTP response from gateway
+- Heartbeat within last 3 hours
+
+### What it does:
+- **Auto-restarts** gateway if it's down
+- **Sends Telegram alerts** to your paired chat if issues detected
+- **Logs** to `/var/log/openclaw-monitor.log`
+
+### Manual commands:
+```bash
+# Run health check manually
+ssh deploy@<IP> "~/openclaw/monitor.sh"
+
+# View monitor logs
+ssh deploy@<IP> "tail -f /var/log/openclaw-monitor.log"
+
+# Check cron job
+ssh deploy@<IP> "crontab -l"
+```
+
+### Troubleshooting
+
+If monitoring isn't working:
+1. Check cron is running: `ssh deploy@<IP> "crontab -l"`
+2. Check log file exists: `ssh deploy@<IP> "ls -la /var/log/openclaw-monitor.log"`
+3. Run manually to debug: `ssh deploy@<IP> "bash -x ~/openclaw/monitor.sh"`
 
 ## Troubleshooting
 
@@ -212,11 +363,16 @@ docker compose ps
 - Check token: `curl https://api.telegram.org/bot<TOKEN>/getMe`
 - Verify IPv6 routing if on Hetzner: `curl -6 https://api.telegram.org`
 - Check gateway logs for pairing requests
+- Ensure using v2026.2.6 (v2026.2.9 has Telegram bug)
 
 ### 1Password not working
 - Verify service account token: `op vault list`
 - Ensure token has access to correct vault
 - Service accounts can't access Personal vaults
+
+### Model errors
+- Check available models: `curl -sf https://opencode.ai/zen/v1/models -H "Authorization: Bearer $OPENCODE_API_KEY" | jq -r '.data[].id'`
+- Ensure model format is `opencode/<model>`
 
 ## Maintenance
 
@@ -265,4 +421,5 @@ VPS: ~$5/month (Hetzner cx22)
 - OpenClaw: https://github.com/openclaw/openclaw
 - Documentation: https://docs.openclaw.ai/platforms/hetzner
 - Hetzner Cloud: https://console.hetzner.cloud
-- OpenCode Zen: https://opencode.ai/zen (free models during beta)
+- OpenCode Zen: https://opencode.ai/zen
+- OpenCode Zen Models: https://docs.openclaw.ai/providers/opencode

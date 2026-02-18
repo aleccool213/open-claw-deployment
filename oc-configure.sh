@@ -90,20 +90,20 @@ step "1/7 — OpenCode Zen API Key"
 info "Sign up at: https://opencode.ai/zen"
   info "Free models during beta: Grok Code Fast 1, GLM 4.7, MiniMax M2.1"
 
-OPENCODE_ZEN_API_KEY="${OPENCODE_ZEN_API_KEY:-}"
-if [[ -n "$OPENCODE_ZEN_API_KEY" ]]; then
+OPENCODE_API_KEY="${OPENCODE_API_KEY:-}"
+if [[ -n "$OPENCODE_API_KEY" ]]; then
   ok "OpenCode Zen key already in .env"
 else
-  if prompt_secret "OpenCode Zen API key" "OPENCODE_ZEN_API_KEY" "ocz_..."; then
-    echo "OPENCODE_ZEN_API_KEY=${OPENCODE_ZEN_API_KEY}" >> "$ENV_FILE"
+  if prompt_secret "OpenCode Zen API key" "OPENCODE_API_KEY" "ocz_..."; then
+    echo "OPENCODE_API_KEY=${OPENCODE_API_KEY}" >> "$ENV_FILE"
     ok "Saved to .env"
   fi
 fi
 
 # Verify the key works
-if [[ -n "${OPENCODE_ZEN_API_KEY:-}" ]]; then
+if [[ -n "${OPENCODE_API_KEY:-}" ]]; then
   MODELS_COUNT=$(curl -sf https://opencode.ai/zen/v1/models \
-    -H "Authorization: Bearer ${OPENCODE_ZEN_API_KEY}" 2>/dev/null \
+    -H "Authorization: Bearer ${OPENCODE_API_KEY}" 2>/dev/null \
     | jq '.data | length' 2>/dev/null || echo "0")
   if [[ "$MODELS_COUNT" -gt 0 ]]; then
     ok "OpenCode Zen API key valid — ${MODELS_COUNT} models available"
@@ -499,7 +499,7 @@ printf "  %-20s %s\n" "Integration" "Status"
 printf "  %-20s %s\n" "────────────────────" "──────────────────────────────"
 
 # OpenCode Zen
-if [[ -n "${OPENCODE_ZEN_API_KEY:-}" ]]; then
+if [[ -n "${OPENCODE_API_KEY:-}" ]]; then
   printf "  %-20s ${GREEN}%s${NC}\n" "OpenCode Zen" "✅ Configured (Kimi K2.5 primary)"
 else
   printf "  %-20s ${YELLOW}%s${NC}\n" "OpenCode Zen" "⏭  Skipped"

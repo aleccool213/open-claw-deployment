@@ -2,38 +2,81 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "zen/x-ai/grok-code-fast-1",
-        "fallbacks": [
-          "zen/zai/glm-4.7"
-        ]
+        "primary": "opencode/kimi-k2.5",
+        "fallbacks": ["opencode/glm-4.7"]
       },
       "models": {
-        "zen/x-ai/grok-code-fast-1": { "alias": "grokcode" },
-        "zen/x-ai/grok-4.1-fast": { "alias": "grok" },
-        "zen/zai/glm-4.7": { "alias": "glm4" },
-        "zen/anthropic/claude-sonnet-4-5": { "alias": "sonnet" },
-        "zen/anthropic/claude-opus-4-5": { "alias": "opus" },
-        "zen/google/gemini-2.5-flash-lite": { "alias": "flash" },
-        "zen/deepseek/deepseek-chat": { "alias": "ds" }
+        "opencode/kimi-k2.5": { "alias": "kimi" },
+        "opencode/kimi-k2.5-free": { "alias": "kimi-free" },
+        "opencode/glm-4.7": { "alias": "glm4" },
+        "opencode/glm-5-free": { "alias": "glm5" },
+        "opencode/claude-sonnet-4-5": { "alias": "sonnet" },
+        "opencode/claude-opus-4-6": { "alias": "opus" },
+        "opencode/gemini-3-flash": { "alias": "flash" },
+        "opencode/gpt-5.1-codex": { "alias": "codex" }
       },
       "heartbeat": {
         "every": "2h",
-        "model": "zen/zai/glm-4.7",
+        "model": "opencode/glm-4.7",
         "target": "last"
       },
       "subagents": {
-        "model": "zen/x-ai/grok-code-fast-1",
+        "model": "opencode/kimi-k2.5",
         "maxConcurrent": 1,
         "archiveAfterMinutes": 60
       },
       "imageModel": {
-        "primary": "zen/x-ai/grok-code-fast-1",
-        "fallbacks": ["zen/zai/glm-4.7"]
+        "primary": "opencode/gemini-3-flash",
+        "fallbacks": ["opencode/glm-4.7"]
       },
-      "contextTokens": 131072
+      "contextTokens": 131072,
+      "maxConcurrent": 4
     }
   },
+  "messages": {
+    "ackReactionScope": "group-mentions"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto"
+  },
   "channels": {
-    "telegram": { "enabled": true, "dmPolicy": "pairing" }
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "groupPolicy": "allowlist",
+      "streamMode": "partial"
+    }
+  },
+  "gateway": {
+    "controlUi": {
+      "allowInsecureAuth": true
+    },
+    "trustedProxies": ["100.64.0.0/10"]
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "opencode": {
+        "baseUrl": "https://opencode.ai/zen/v1",
+        "apiKey": "${OPENCODE_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          { "id": "kimi-k2.5", "name": "Kimi K2.5" },
+          { "id": "kimi-k2.5-free", "name": "Kimi K2.5 Free" },
+          { "id": "glm-4.7", "name": "GLM 4.7" },
+          { "id": "glm-5-free", "name": "GLM 5 Free" },
+          { "id": "claude-sonnet-4-5", "name": "Claude Sonnet 4.5" },
+          { "id": "claude-opus-4-6", "name": "Claude Opus 4.6" },
+          { "id": "gemini-3-flash", "name": "Gemini 3 Flash" },
+          { "id": "gpt-5.1-codex", "name": "GPT 5.1 Codex" },
+          { "id": "big-pickle", "name": "Big Pickle" },
+          { "id": "minimax-m2.1-free", "name": "MiniMax M2.1 Free" }
+        ]
+      }
+    }
+  },
+  "env": {
+    "OPENCODE_API_KEY": "YOUR_OPENCODE_API_KEY_HERE"
   }
 }
