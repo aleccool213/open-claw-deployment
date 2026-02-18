@@ -90,21 +90,6 @@ From official docs and community guides:
 - **Env file path**: Update reference from `~/openclaw/.env` to `~/.openclaw/.env`
 - **Config dir reference**: Update `OPENCLAW_DIR` usage (no longer needed for docker compose commands)
 
-### 3. `monitor.sh` — Medium update
-
-- **Env file path**: `source ~/openclaw/.env` → `source ~/.openclaw/.env`
-- **`check_gateway()` function**:
-  - Remove: `docker compose -f ~/openclaw/docker-compose.yml ps openclaw-gateway | grep -q "Up"`
-  - Add: `systemctl is-active --quiet openclaw`
-  - Keep: HTTP health check via `curl`
-- **`check_heartbeat()` function**:
-  - Remove: `docker compose -f ~/openclaw/docker-compose.yml logs --since=3h`
-  - Add: `journalctl -u openclaw --since "3 hours ago" --no-pager`
-- **Auto-restart**:
-  - Remove: `cd ~/openclaw && docker compose restart openclaw-gateway`
-  - Add: `sudo systemctl restart openclaw`
-  - Note: The `deploy` user needs passwordless sudo for `systemctl restart openclaw` only — add a sudoers rule in bootstrap
-
 ## Files That Stay the Same
 
 - Security hardening phases (SSH, UFW, fail2ban, unattended-upgrades) — no change
@@ -114,21 +99,12 @@ From official docs and community guides:
 - `oc-provision.sh` — no change
 - `openclaw.json` / `openclaw.json.example` — no change (config format is the same)
 
-## Additional: Sudoers Rule for Monitor
+## Files Deleted
 
-In `oc-bootstrap.sh`, add a sudoers rule so the `deploy` user can restart the openclaw service without a password:
-
-```bash
-echo "deploy ALL=(ALL) NOPASSWD: /bin/systemctl restart openclaw, /bin/systemctl start openclaw, /bin/systemctl stop openclaw" \
-  > /etc/sudoers.d/openclaw
-chmod 440 /etc/sudoers.d/openclaw
-```
-
-(The deploy user already has passwordless sudo via `usermod -aG sudo deploy`, but this scopes it to just the service commands for the monitor script.)
+- `monitor.sh` — removed entirely; OpenClaw has built-in heartbeats and health monitoring
 
 ## Sequence of Implementation
 
 1. Update `oc-bootstrap.sh` (major changes)
 2. Update `oc-configure.sh` (minor changes)
-3. Update `monitor.sh` (medium changes)
-4. Update documentation strings in `README.md` and `AGENTS.md` if needed
+3. Update documentation strings in `README.md` and `AGENTS.md` if needed

@@ -22,8 +22,7 @@ Heartbeats are periodic check-ins OpenClaw does to maintain context and keep the
 | View logs | `ssh deploy@<IP> "cd ~/openclaw && docker compose logs -f openclaw-gateway"` |
 | Restart gateway | `ssh deploy@<IP> "cd ~/openclaw && docker compose restart openclaw-gateway"` |
 | Trigger backup | `sudo /usr/local/bin/openclaw-backup.sh` |
-| Run health check | `ssh deploy@<IP> "~/openclaw/monitor.sh"` |
-| View monitor logs | `ssh deploy@<IP> "tail -f /var/log/openclaw-monitor.log"` |
+
 
 ## Deployment Workflow
 
@@ -85,7 +84,6 @@ scp .env deploy@<IP>:~/openclaw/.env
 ├── oc-bootstrap.sh              # Run once as root on fresh VPS
 ├── oc-configure.sh              # Run as deploy user to configure integrations
 ├── oc-load-secrets.sh           # (Optional) Load secrets from 1Password CLI
-├── monitor.sh                   # Health monitoring (cron every 5 min)
 ├── openclaw.json.example        # OpenClaw configuration template (OpenCode Zen)
 └── openclaw-hetzner-checklist.md # Complete deployment checklist
 ```
@@ -311,39 +309,6 @@ Before considering deployment complete:
 - [ ] Container running as non-root (UID 1000)
 - [ ] Automated backups tested manually
 - [ ] Can SSH as deploy user from second terminal
-- [ ] Health monitoring cron job configured
-
-## Health Monitoring
-
-The `monitor.sh` script runs every 5 minutes via cron and checks:
-- Gateway container status
-- HTTP response from gateway
-- Heartbeat within last 3 hours
-
-### What it does:
-- **Auto-restarts** gateway if it's down
-- **Sends Telegram alerts** to your paired chat if issues detected
-- **Logs** to `/var/log/openclaw-monitor.log`
-
-### Manual commands:
-```bash
-# Run health check manually
-ssh deploy@<IP> "~/openclaw/monitor.sh"
-
-# View monitor logs
-ssh deploy@<IP> "tail -f /var/log/openclaw-monitor.log"
-
-# Check cron job
-ssh deploy@<IP> "crontab -l"
-```
-
-### Troubleshooting
-
-If monitoring isn't working:
-1. Check cron is running: `ssh deploy@<IP> "crontab -l"`
-2. Check log file exists: `ssh deploy@<IP> "ls -la /var/log/openclaw-monitor.log"`
-3. Run manually to debug: `ssh deploy@<IP> "bash -x ~/openclaw/monitor.sh"`
-
 ## Troubleshooting
 
 ### Gateway not responding
