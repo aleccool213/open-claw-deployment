@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # oc-bootstrap.sh — Run on fresh Hetzner VPS as root
-# Covers: Docker, OpenClaw clone, deploy user, security hardening, backups
+# Covers: Node.js, OpenClaw install, deploy user, security hardening, backups
 # Usage: ssh root@<VPS_IP> 'bash -s' < oc-bootstrap.sh
 set -euo pipefail
 
@@ -45,34 +45,29 @@ verify "Running Ubuntu 24.x" "grep -q 'Ubuntu 24' /etc/os-release"
 # PHASE 1: BASE SYSTEM
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "1/9 — Installing Docker"
+step "1/9 — Installing Node.js 22"
 apt-get update -qq
 apt-get install -y -qq git curl ca-certificates jq > /dev/null
 
-if command -v docker &>/dev/null; then
-  warn "Docker already installed, skipping"
+if node -e "process.exit(parseInt(process.versions.node) >= 22 ? 0 : 1)" 2>/dev/null; then
+  warn "Node.js $(node -v) already installed, skipping"
 else
-  curl -fsSL https://get.docker.com | sh
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null 2>&1
+  apt-get install -y -qq nodejs > /dev/null
 fi
 
-verify "Docker installed"          "docker --version"
-verify "Docker Compose installed"  "docker compose version"
+verify "Node.js 22+ installed" "node -e \"process.exit(parseInt(process.versions.node) >= 22 ? 0 : 1)\""
+verify "npm installed"         "npm --version"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PHASE 2: OPENCLAW
 # ═════════════════════════════════════════════════════════════════════════════
 
-# IMPORTANT: Pin to v2026.2.6 (v2026.2.9 has Telegram bug where polling never starts)
-# See: https://github.com/openclaw/openclaw/issues/15082
-OPENCLAW_VERSION="v2026.2.6"
-OPENCLAW_IMAGE="openclaw:${OPENCLAW_VERSION}"
-
-step "2/9 — Building OpenClaw ${OPENCLAW_VERSION}"
+step "2/9 — Installing OpenClaw"
 DEPLOY_HOME="/home/deploy"
-OPENCLAW_DIR="${DEPLOY_HOME}/openclaw"
 OPENCLAW_DATA="${DEPLOY_HOME}/.openclaw"
 
-# Create deploy user first (need home dir for clone location)
+# Create deploy user first (need home dir)
 if id deploy &>/dev/null; then
   warn "User 'deploy' already exists, skipping creation"
 else
@@ -81,7 +76,6 @@ else
 fi
 
 usermod -aG sudo deploy 2>/dev/null || true
-usermod -aG docker deploy 2>/dev/null || true
 
 # Set up SSH key for deploy user
 mkdir -p "${DEPLOY_HOME}/.ssh"
@@ -93,29 +87,23 @@ chmod 700 "${DEPLOY_HOME}/.ssh"
 chmod 600 "${DEPLOY_HOME}/.ssh/authorized_keys" 2>/dev/null || true
 ok "SSH keys copied to deploy user"
 
-# Download and build pinned version from source
-if [[ -d "$OPENCLAW_DIR" ]]; then
-  warn "OpenClaw already exists at ${OPENCLAW_DIR}, checking version..."
+# Install OpenClaw via official installer
+if sudo -u deploy bash -c 'command -v openclaw' &>/dev/null; then
+  warn "OpenClaw already installed ($(sudo -u deploy bash -c 'openclaw --version 2>/dev/null || echo unknown')), skipping"
 else
-  echo "  Downloading OpenClaw ${OPENCLAW_VERSION} source..."
-  cd /tmp
-  curl -sL "https://github.com/openclaw/openclaw/archive/refs/tags/${OPENCLAW_VERSION}.tar.gz" -o openclaw.tar.gz
-  tar xzf openclaw.tar.gz
-  mv "openclaw-${OPENCLAW_VERSION#v}" "$OPENCLAW_DIR"
-  rm -f openclaw.tar.gz
-  chown -R deploy:deploy "$OPENCLAW_DIR"
-  ok "Downloaded OpenClaw ${OPENCLAW_VERSION}"
+  echo "  Installing OpenClaw via official installer..."
+  sudo -u deploy bash -c 'curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard'
 fi
 
-verify "Source directory exists" "test -f ${OPENCLAW_DIR}/docker-compose.yml"
+verify "OpenClaw installed" "sudo -u deploy bash -c 'command -v openclaw'"
 
 step "3/9 — Persistent directories & secrets"
 
-mkdir -p "${OPENCLAW_DATA}" "${OPENCLAW_DATA}/workspace"
-chown -R 1000:1000 "${OPENCLAW_DATA}"
+mkdir -p "${OPENCLAW_DATA}"
+chown -R deploy:deploy "${OPENCLAW_DATA}"
 
 # Generate .env if it doesn't exist
-ENV_FILE="${OPENCLAW_DIR}/.env"
+ENV_FILE="${OPENCLAW_DATA}/.env"
 if [[ -f "$ENV_FILE" ]]; then
   warn ".env already exists, not overwriting"
 else
@@ -123,18 +111,12 @@ else
   KEYRING_PASSWORD=$(openssl rand -hex 32)
 
   cat > "$ENV_FILE" <<EOF
-# IMPORTANT: Use v2026.2.6 (v2026.2.9 has Telegram bug - polling never starts)
-# See: https://github.com/openclaw/openclaw/issues/15082
-OPENCLAW_IMAGE=${OPENCLAW_IMAGE}
+OPENCLAW_HOME=${OPENCLAW_DATA}
+OPENCLAW_CONFIG_PATH=${OPENCLAW_DATA}/openclaw.json
 OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}
-OPENCLAW_GATEWAY_BIND=lan
+OPENCLAW_GATEWAY_BIND=loopback
 OPENCLAW_GATEWAY_PORT=18789
-
-OPENCLAW_CONFIG_DIR=${OPENCLAW_DATA}
-OPENCLAW_WORKSPACE_DIR=${OPENCLAW_DATA}/workspace
-
 GOG_KEYRING_PASSWORD=${KEYRING_PASSWORD}
-XDG_CONFIG_HOME=/home/node/.openclaw
 EOF
 
   chown deploy:deploy "$ENV_FILE"
@@ -149,7 +131,7 @@ EOF
 fi
 
 verify ".env exists and is restricted" "test -f $ENV_FILE && stat -c '%a' $ENV_FILE | grep -q '600'"
-verify "Data dir writable by node user" "test -d ${OPENCLAW_DATA}/workspace"
+verify "Data dir exists"               "test -d ${OPENCLAW_DATA}"
 
 # Write openclaw.json with correct OpenCode Zen configuration
 # This config includes models.providers with baseUrl for OpenCode Zen
@@ -241,35 +223,47 @@ else
   }
 }
 OPENCLAW_CONFIG
-  chown 1000:1000 "$CONFIG_FILE"
+  chown deploy:deploy "$CONFIG_FILE"
   chmod 600 "$CONFIG_FILE"
   ok "Wrote OpenClaw config with OpenCode Zen provider setup"
   info "You'll set OPENCODE_API_KEY in oc-configure.sh"
 fi
 
-step "4/9 — Building & launching gateway"
-cd "$OPENCLAW_DIR"
+step "4/9 — Creating systemd service"
 
-# Build from source (pinned version)
-echo "  Building OpenClaw ${OPENCLAW_VERSION} from source..."
-echo "  This may take a few minutes on first run..."
-export DOCKER_BUILDKIT=1
-docker build \
-  --build-arg BUILDKIT_INLINE_CACHE=1 \
-  -t "${OPENCLAW_IMAGE}" .
-ok "Built ${OPENCLAW_IMAGE}"
+# Locate the openclaw binary installed for the deploy user
+OPENCLAW_BIN=$(sudo -u deploy bash -c 'command -v openclaw 2>/dev/null || echo "$HOME/.local/bin/openclaw"')
 
-docker compose up -d openclaw-gateway
+cat > /etc/systemd/system/openclaw.service <<EOF
+[Unit]
+Description=OpenClaw Gateway
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=deploy
+EnvironmentFile=${OPENCLAW_DATA}/.env
+ExecStart=${OPENCLAW_BIN} gateway start
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now openclaw
 sleep 5
 
-# Verify gateway is running
-if docker compose ps openclaw-gateway | grep -q "Up"; then
-  ok "Gateway container is running"
+if systemctl is-active --quiet openclaw; then
+  ok "OpenClaw gateway is running"
 else
-  warn "Gateway may still be starting — check: docker compose logs -f openclaw-gateway"
+  warn "Gateway may still be starting — check: journalctl -u openclaw -f"
 fi
 
-# Quick health check
 if curl -sf http://127.0.0.1:18789/ >/dev/null 2>&1; then
   ok "Gateway responding on http://127.0.0.1:18789/"
 else
@@ -406,7 +400,7 @@ echo -e "${GREEN}  ✅ Bootstrap complete!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 echo "  Summary:"
-echo "    • Docker + OpenClaw gateway running"
+echo "    • Node.js + OpenClaw gateway running via systemd"
 echo "    • deploy user created with SSH access"
 echo "    • Tailscale installed (configure in next step)"
 echo "    • UFW firewall + fail2ban active"

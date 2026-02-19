@@ -53,9 +53,9 @@ if [[ "$(id -un)" == "root" ]]; then
   exit 1
 fi
 
-OPENCLAW_DIR="$HOME/openclaw"
-ENV_FILE="${OPENCLAW_DIR}/.env"
-CONFIG_FILE="$HOME/.openclaw/openclaw.json"
+OPENCLAW_DATA="$HOME/.openclaw"
+ENV_FILE="${OPENCLAW_DATA}/.env"
+CONFIG_FILE="${OPENCLAW_DATA}/openclaw.json"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo -e "${RED}.env not found at ${ENV_FILE}. Run oc-bootstrap.sh first.${NC}"
@@ -454,7 +454,7 @@ fi
 
 if [[ "${WRITE_CONFIG:-false}" == "true" ]] || [[ ! -f "$CONFIG_FILE" ]]; then
   # Copy example config (Telegram already enabled by default)
-  cp "$OPENCLAW_DIR/openclaw.json.example" "$CONFIG_FILE"
+  cp "$(dirname "$0")/openclaw.json.example" "$CONFIG_FILE"
   chmod 600 "$CONFIG_FILE"
   ok "Config written to ${CONFIG_FILE}"
 
@@ -478,14 +478,13 @@ ok ".env permissions set to 600"
 # ═════════════════════════════════════════════════════════════════════════════
 
 step "Restarting gateway with new config"
-cd "$OPENCLAW_DIR"
-docker compose restart openclaw-gateway
+sudo systemctl restart openclaw
 sleep 5
 
-if docker compose ps openclaw-gateway | grep -q "Up"; then
+if systemctl is-active --quiet openclaw; then
   ok "Gateway is running"
 else
-  fail "Gateway failed to start — check: docker compose logs openclaw-gateway"
+  fail "Gateway failed to start — check: journalctl -u openclaw -f"
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -542,7 +541,7 @@ echo ""
 echo "    Telegram pairing (REQUIRED):"
 echo "      1. Open Telegram → send /start to your bot @${BOT_NAME}"
 echo "      2. Copy the pairing code"
-echo "      3. Run: docker compose run --rm openclaw-cli pairing approve telegram <CODE>"
+echo "      3. Run: openclaw pairing approve telegram <CODE>"
 echo ""
 echo "    Access OpenClaw Gateway:"
 TAILSCALE_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // "unknown"' 2>/dev/null || echo "unknown")
@@ -557,7 +556,7 @@ echo "      /model sonnet   — Claude Sonnet 4.5 (complex)"
 echo "      /model opus     — Claude Opus 4.5 (hardest tasks)"
 echo ""
 echo "    Config files:"
-echo "      Secrets:  ${ENV_FILE}"
+echo "      Secrets:  ${ENV_FILE}  (loaded by systemd at startup)"
 echo "      Config:   ${CONFIG_FILE}"
 echo "      Email:    ${HIMALAYA_CONFIG:-not configured}"
 echo ""

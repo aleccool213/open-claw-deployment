@@ -1,5 +1,9 @@
 # OpenClaw on Hetzner — Terminal-First Deployment Checklist
 
+> ⚠️ **Deprecated**: This checklist reflects the old Docker-based deployment approach.
+> The current setup runs OpenClaw directly on the VPS via Node.js + systemd.
+> Use `oc-bootstrap.sh` → `oc-configure.sh` for the current approach.
+
 > Based on the [official docs](https://docs.openclaw.ai/platforms/hetzner) and community hardening guides.
 > Goal: OpenClaw Gateway running 24/7 on a ~$5/mo Hetzner VPS via Docker, accessed over SSH tunnel.
 
