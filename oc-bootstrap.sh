@@ -66,6 +66,7 @@ verify "npm installed"         "npm --version"
 step "2/9 — Installing OpenClaw"
 DEPLOY_HOME="/home/deploy"
 OPENCLAW_DATA="${DEPLOY_HOME}/.openclaw"
+OPENCLAW_VERSION="2026.2.6"
 
 # Create deploy user first (need home dir)
 if id deploy &>/dev/null; then
@@ -87,12 +88,12 @@ chmod 700 "${DEPLOY_HOME}/.ssh"
 chmod 600 "${DEPLOY_HOME}/.ssh/authorized_keys" 2>/dev/null || true
 ok "SSH keys copied to deploy user"
 
-# Install OpenClaw via official installer
+# Install pinned OpenClaw version via npm
 if sudo -u deploy bash -c 'command -v openclaw' &>/dev/null; then
   warn "OpenClaw already installed ($(sudo -u deploy bash -c 'openclaw --version 2>/dev/null || echo unknown')), skipping"
 else
-  echo "  Installing OpenClaw via official installer..."
-  sudo -u deploy bash -c 'curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard'
+  echo "  Installing openclaw@${OPENCLAW_VERSION} via npm..."
+  sudo -u deploy bash -c "npm install -g openclaw@${OPENCLAW_VERSION}"
 fi
 
 verify "OpenClaw installed" "sudo -u deploy bash -c 'command -v openclaw'"
