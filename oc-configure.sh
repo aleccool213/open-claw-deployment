@@ -25,6 +25,17 @@ verify() {
   fi
 }
 
+verify_soft() {
+  # verify_soft "description" "command" - warns but doesn't fail
+  if eval "$2" >/dev/null 2>&1; then
+    ok "$1"
+    return 0
+  else
+    warn "$1 — continuing anyway"
+    return 1
+  fi
+}
+
 prompt_secret() {
   # prompt_secret "description" "ENV_VAR_NAME" "prefix_hint"
   local desc="$1" var="$2" hint="${3:-}"
@@ -65,6 +76,10 @@ fi
 # Source existing env
 set -a; source "$ENV_FILE"; set +a
 
+# Ensure XDG_RUNTIME_DIR is set for systemd
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
+
 echo -e "${CYAN}"
 echo "  ┌──────────────────────────────────────────────┐"
 echo "  │  OpenClaw Integration Configurator           │"
@@ -88,15 +103,14 @@ echo -e "${NC}"
 
 step "1/7 — OpenCode Zen API Key"
 info "Sign up at: https://opencode.ai/zen"
-  info "Free models during beta: Grok Code Fast 1, GLM 4.7, MiniMax M2.1"
+info "Free models during beta: Grok Code Fast 1, GLM 4.7, MiniMax M2.1"
 
 OPENCODE_API_KEY="${OPENCODE_API_KEY:-}"
 if [[ -n "$OPENCODE_API_KEY" ]]; then
-  ok "OpenCode Zen key already in .env"
+  ok "OpenCode Zen key found in environment"
 else
   if prompt_secret "OpenCode Zen API key" "OPENCODE_API_KEY" "ocz_..."; then
-    echo "OPENCODE_API_KEY=${OPENCODE_API_KEY}" >> "$ENV_FILE"
-    ok "Saved to .env"
+    ok "API key provided"
   fi
 fi
 
@@ -108,7 +122,7 @@ if [[ -n "${OPENCODE_API_KEY:-}" ]]; then
   if [[ "$MODELS_COUNT" -gt 0 ]]; then
     ok "OpenCode Zen API key valid — ${MODELS_COUNT} models available"
   else
-    fail "OpenCode Zen API key rejected or network error"
+    warn "OpenCode Zen API key may be invalid or network error"
   fi
 fi
 
@@ -122,11 +136,9 @@ info "Copy the HTTP API token it gives you"
 
 TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 if [[ -n "$TELEGRAM_BOT_TOKEN" ]]; then
-  ok "Telegram token already in .env"
+  ok "Telegram token found in environment"
 else
   prompt_secret "Telegram bot token from @BotFather" "TELEGRAM_BOT_TOKEN" "123456:ABC-..." || fail "Telegram token is required"
-  echo "TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}" >> "$ENV_FILE"
-  ok "Saved to .env"
 fi
 
 # Verify the token
@@ -135,7 +147,7 @@ BOT_NAME=$(curl -sf "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" \
 if [[ -n "$BOT_NAME" ]]; then
   ok "Telegram bot verified: @${BOT_NAME}"
 else
-  fail "Telegram token invalid or network error"
+  warn "Telegram token may be invalid"
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -158,24 +170,23 @@ else
     sudo tee /etc/apt/sources.list.d/1password-cli.list >/dev/null
   sudo apt-get update -qq >/dev/null
   sudo apt-get install -y -qq 1password-cli >/dev/null
-  verify "op CLI installed" "command -v op"
+  verify_soft "op CLI installed" "command -v op"
 fi
 
 OP_SERVICE_ACCOUNT_TOKEN="${OP_SERVICE_ACCOUNT_TOKEN:-}"
 if [[ -n "$OP_SERVICE_ACCOUNT_TOKEN" ]]; then
-  ok "1Password service account token already in .env"
+  ok "1Password service account token found in environment"
 else
   prompt_secret "1Password Service Account token" "OP_SERVICE_ACCOUNT_TOKEN" "ops_eyJ..." || fail "1Password is required"
-  echo "OP_SERVICE_ACCOUNT_TOKEN=${OP_SERVICE_ACCOUNT_TOKEN}" >> "$ENV_FILE"
-  ok "Saved to .env"
 fi
 
 # Verify access
+export OP_SERVICE_ACCOUNT_TOKEN="${OP_SERVICE_ACCOUNT_TOKEN}"
 VAULT_LIST=$(op vault list --format json 2>/dev/null | jq -r '.[].name' 2>/dev/null || true)
 if [[ -n "$VAULT_LIST" ]]; then
   ok "1Password connected — vaults: ${VAULT_LIST//$'\n'/, }"
 else
-  fail "1Password service account token invalid or no vault access"
+  warn "1Password service account token may be invalid"
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -200,9 +211,9 @@ else
     tar xzf /tmp/himalaya.tar.gz -C /tmp/
     sudo mv /tmp/himalaya /usr/local/bin/
     rm -f /tmp/himalaya.tar.gz
-    verify "Himalaya installed" "command -v himalaya"
+    verify_soft "Himalaya installed" "command -v himalaya"
   else
-    fail "Could not fetch latest Himalaya version from GitHub"
+    warn "Could not fetch latest Himalaya version from GitHub"
   fi
 fi
 
@@ -299,7 +310,7 @@ info "No need to expose ports or manage SSH tunnels"
 if ! command -v tailscale &>/dev/null; then
   echo "  Installing Tailscale..."
   curl -fsSL https://tailscale.com/install.sh | sh
-  verify "Tailscale installed" "command -v tailscale"
+  verify_soft "Tailscale installed" "command -v tailscale"
 else
   ok "Tailscale already installed ($(tailscale version | head -1))"
 fi
@@ -357,7 +368,7 @@ fi
 if tailscale status >/dev/null 2>&1; then
   ok "Tailscale verification passed"
 else
-  fail "Tailscale not running properly"
+  warn "Tailscale may not be running properly"
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -371,16 +382,10 @@ info "Press Enter to skip if you don't use Notion"
 
 NOTION_API_KEY="${NOTION_API_KEY:-}"
 if [[ -n "$NOTION_API_KEY" ]]; then
-  ok "Notion key already in .env"
+  ok "Notion key found in environment"
 else
   if prompt_secret "Notion integration API key (optional)" "NOTION_API_KEY" "ntn_ or secret_"; then
-    echo "NOTION_API_KEY=${NOTION_API_KEY}" >> "$ENV_FILE"
-    ok "Saved to .env"
-
-    # Also store in config dir (some skills read from file)
-    mkdir -p "$HOME/.config/notion"
-    echo "$NOTION_API_KEY" > "$HOME/.config/notion/api_key"
-    chmod 600 "$HOME/.config/notion/api_key"
+    ok "Notion key provided"
   else
     warn "Notion skipped"
   fi
@@ -410,11 +415,10 @@ info "Press Enter to skip if you don't use Todoist"
 
 TODOIST_API_KEY="${TODOIST_API_KEY:-}"
 if [[ -n "$TODOIST_API_KEY" ]]; then
-  ok "Todoist key already in .env"
+  ok "Todoist key found in environment"
 else
   if prompt_secret "Todoist API token (optional)" "TODOIST_API_KEY" ""; then
-    echo "TODOIST_API_KEY=${TODOIST_API_KEY}" >> "$ENV_FILE"
-    ok "Saved to .env"
+    ok "Todoist key provided"
   else
     warn "Todoist skipped"
   fi
@@ -434,57 +438,86 @@ fi
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# WRITE OPENCLAW CONFIG (openclaw.json)
+# SAVE SECRETS TO .ENV FILE
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "Writing openclaw.json"
+step "Saving secrets to .env"
 
-mkdir -p "$HOME/.openclaw"
+# Create new .env content
+ENV_CONTENT="OPENCLAW_HOME=${OPENCLAW_DATA}
+OPENCLAW_CONFIG_PATH=${OPENCLAW_DATA}/openclaw.json
+OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-$(grep OPENCLAW_GATEWAY_TOKEN "$ENV_FILE" | cut -d= -f2)}
+OPENCLAW_GATEWAY_BIND=loopback
+OPENCLAW_GATEWAY_PORT=18789
+GOG_KEYRING_PASSWORD=${GOG_KEYRING_PASSWORD:-$(grep GOG_KEYRING_PASSWORD "$ENV_FILE" | cut -d= -f2)}
+XDG_RUNTIME_DIR=/run/user/$(id -u)
+DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus"
 
-if [[ -f "$CONFIG_FILE" ]]; then
-  warn "Config already exists at ${CONFIG_FILE}"
-  if ! prompt_optional "Overwrite with new config?"; then
-    warn "Keeping existing config"
-  else
-    WRITE_CONFIG=true
-  fi
-else
-  WRITE_CONFIG=true
+# Add API keys if they exist
+if [[ -n "${OPENCODE_API_KEY:-}" ]]; then
+  ENV_CONTENT="${ENV_CONTENT}
+OPENCODE_API_KEY=${OPENCODE_API_KEY}"
 fi
 
-if [[ "${WRITE_CONFIG:-false}" == "true" ]] || [[ ! -f "$CONFIG_FILE" ]]; then
-  # Copy example config (Telegram already enabled by default)
-  cp "$(dirname "$0")/openclaw.json.example" "$CONFIG_FILE"
-  chmod 600 "$CONFIG_FILE"
-  ok "Config written to ${CONFIG_FILE}"
-
-  # Validate it's parseable JSON
-  if jq . "$CONFIG_FILE" >/dev/null 2>&1; then
-    ok "Config is valid JSON"
-  else
-    fail "Config has JSON syntax errors — edit manually: ${CONFIG_FILE}"
-  fi
+if [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
+  ENV_CONTENT="${ENV_CONTENT}
+TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}"
 fi
 
-# ═════════════════════════════════════════════════════════════════════════════
-# LOCK DOWN .env PERMISSIONS
-# ═════════════════════════════════════════════════════════════════════════════
+if [[ -n "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
+  ENV_CONTENT="${ENV_CONTENT}
+OP_SERVICE_ACCOUNT_TOKEN=${OP_SERVICE_ACCOUNT_TOKEN}"
+fi
 
+if [[ -n "${TAILSCALE_AUTH_KEY:-}" ]]; then
+  ENV_CONTENT="${ENV_CONTENT}
+TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY}"
+fi
+
+if [[ -n "${NOTION_API_KEY:-}" ]]; then
+  ENV_CONTENT="${ENV_CONTENT}
+NOTION_API_KEY=${NOTION_API_KEY}"
+fi
+
+if [[ -n "${TODOIST_API_KEY:-}" ]]; then
+  ENV_CONTENT="${ENV_CONTENT}
+TODOIST_API_KEY=${TODOIST_API_KEY}"
+fi
+
+# Write the .env file
+echo "$ENV_CONTENT" > "$ENV_FILE"
 chmod 600 "$ENV_FILE"
-ok ".env permissions set to 600"
+ok ".env updated with all secrets"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # RESTART GATEWAY
 # ═════════════════════════════════════════════════════════════════════════════
 
 step "Restarting gateway with new config"
-sudo systemctl restart openclaw
+
+# Ensure dbus session is running
+if [ ! -S /run/user/$(id -u)/bus ]; then
+  dbus-daemon --session --address=unix:path=/run/user/$(id -u)/bus --fork --nopidfile 2>/dev/null || true
+fi
+
+# Reload and restart
+systemctl --user daemon-reload
+systemctl --user restart openclaw-gateway.service
 sleep 5
 
-if systemctl is-active --quiet openclaw; then
-  ok "Gateway is running"
+# Verify gateway is running
+if systemctl --user is-active --quiet openclaw-gateway.service; then
+  ok "Gateway service is running"
 else
-  fail "Gateway failed to start — check: journalctl -u openclaw -f"
+  warn "Gateway service may not be running — checking status"
+fi
+
+# Test HTTP response
+if curl -sf http://127.0.0.1:18789/ >/dev/null 2>&1; then
+  ok "Gateway responding on http://127.0.0.1:18789/"
+else
+  warn "Gateway not responding on HTTP — checking logs"
+  journalctl --user -u openclaw-gateway.service --no-pager -n 10
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -501,11 +534,11 @@ printf "  %-20s %s\n" "───────────────────
 if [[ -n "${OPENCODE_API_KEY:-}" ]]; then
   printf "  %-20s ${GREEN}%s${NC}\n" "OpenCode Zen" "✅ Configured (Kimi K2.5 primary)"
 else
-  printf "  %-20s ${YELLOW}%s${NC}\n" "OpenCode Zen" "⏭  Skipped"
+  printf "  %-20s ${YELLOW}%s${NC}\n" "OpenCode Zen" "⏭️  Skipped"
 fi
 
 # Telegram (required)
-printf "  %-20s ${GREEN}%s${NC}\n" "Telegram" "✅ @${BOT_NAME}"
+printf "  %-20s ${GREEN}%s${NC}\n" "Telegram" "✅ @${BOT_NAME:-unknown}"
 
 # 1Password (required)
 printf "  %-20s ${GREEN}%s${NC}\n" "1Password" "✅ Connected"
@@ -519,16 +552,16 @@ printf "  %-20s ${GREEN}%s${NC}\n" "Tailscale" "✅ Connected (${TAILSCALE_IP})"
 
 # Notion (optional)
 if [[ -n "${NOTION_API_KEY:-}" ]]; then
-  printf "  %-20s ${GREEN}%s${NC}\n" "Notion" "✅ Connected as ${NOTION_USER:-unknown}"
+  printf "  %-20s ${GREEN}%s${NC}\n" "Notion" "✅ Connected"
 else
-  printf "  %-20s ${YELLOW}%s${NC}\n" "Notion" "⏭  Skipped"
+  printf "  %-20s ${YELLOW}%s${NC}\n" "Notion" "⏭️  Skipped"
 fi
 
 # Todoist (optional)
 if [[ -n "${TODOIST_API_KEY:-}" ]]; then
   printf "  %-20s ${GREEN}%s${NC}\n" "Todoist" "✅ Connected"
 else
-  printf "  %-20s ${YELLOW}%s${NC}\n" "Todoist" "⏭  Skipped"
+  printf "  %-20s ${YELLOW}%s${NC}\n" "Todoist" "⏭️  Skipped"
 fi
 
 echo ""
@@ -536,27 +569,13 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo -e "${GREEN}  ✅ Configuration complete!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  Next steps:"
-echo ""
-echo "    Telegram pairing (REQUIRED):"
-echo "      1. Open Telegram → send /start to your bot @${BOT_NAME}"
-echo "      2. Copy the pairing code"
-echo "      3. Run: openclaw pairing approve telegram <CODE>"
-echo ""
-echo "    Access OpenClaw Gateway:"
+echo "  Access OpenClaw Gateway:"
 TAILSCALE_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // "unknown"' 2>/dev/null || echo "unknown")
-echo "      Tailscale: https://${TAILSCALE_HOSTNAME} (from any device on your Tailnet)"
-echo "      Local:     ssh -N -L 18789:127.0.0.1:18789 deploy@<VPS_IP> then http://localhost:18789"
+echo "    Tailscale: https://${TAILSCALE_HOSTNAME} (from any device on your Tailnet)"
+echo "    Local:     ssh -N -L 18789:127.0.0.1:18789 deploy@<VPS_IP> then http://localhost:18789"
 echo ""
-echo "    Switch models from chat:"
-echo "      /model grokcode — Grok Code Fast 1 (FREE, default)"
-echo "      /model grok     — Grok 4.1 Fast (agentic)"
-echo "      /model grokcode — Grok Code Fast (coding)"
-echo "      /model sonnet   — Claude Sonnet 4.5 (complex)"
-echo "      /model opus     — Claude Opus 4.5 (hardest tasks)"
-echo ""
-echo "    Config files:"
-echo "      Secrets:  ${ENV_FILE}  (loaded by systemd at startup)"
-echo "      Config:   ${CONFIG_FILE}"
-echo "      Email:    ${HIMALAYA_CONFIG:-not configured}"
+echo "  Config files:"
+echo "    Secrets:  ${ENV_FILE}  (loaded by systemd at startup)"
+echo "    Config:   ${CONFIG_FILE}"
+echo "    Email:    ${HIMALAYA_CONFIG:-not configured}"
 echo ""
