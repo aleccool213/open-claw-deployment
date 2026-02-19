@@ -7,7 +7,7 @@ This is my opinionated deployment of [OpenClaw](https://github.com/openclaw/open
 I believe in setups that are:
 - **Simple to understand** — Plain bash scripts you can read and modify
 - **Cheap to run** — $5-20/month total, not hundreds
-- **Easy to maintain** — No complex tooling, just SSH and Docker
+- **Easy to maintain** — No complex tooling, just SSH and systemd
 - **Secure by default** — Hardened from the start, not as an afterthought
 
 If you want Kubernetes with 47 microservices, this isn't for you. If you want AI automation that just works without breaking the bank, read on.
@@ -32,7 +32,8 @@ This repo contains three main scripts that automate the entire deployment:
 - Configures SSH to use keys only (disables password login)
 - Sets up a firewall (UFW) to block everything except SSH
 - Installs fail2ban to prevent brute-force attacks
-- Installs Docker for running OpenClaw in a container
+- Installs Node.js and OpenClaw via the official installer
+- Creates a systemd service so the gateway runs automatically
 - Sets up automatic security updates
 
 **When to run:** Once, right after creating a fresh VPS. Run as `root`.
@@ -41,9 +42,8 @@ This repo contains three main scripts that automate the entire deployment:
 **What it does:** Installs and configures OpenClaw with your integrations.
 - Prompts for API keys (OpenCode Zen, Telegram, etc.)
 - Generates the OpenClaw configuration file
-- Deploys OpenClaw as a Docker container
+- Deploys OpenClaw and restarts the systemd service
 - Sets up email client (Himalaya) for IMAP/SMTP
-- Configures the container to restart automatically
 
 **When to run:** After bootstrap completes. Run as `deploy` user (not root).
 
@@ -67,7 +67,7 @@ hcloud server create --name openclaw --type cx22 --image ubuntu-24.04 \
   --location fsn1 --ssh-key your-key
 
 # Step 2: Harden the server (SSH as root, pipe in bootstrap script)
-# This sets up security, creates 'deploy' user, installs Docker
+# This sets up security, creates 'deploy' user, installs Node.js + OpenClaw
 ssh root@$(hcloud server ip openclaw) 'bash -s' < oc-bootstrap.sh
 
 # Step 3a: (Optional) Pre-load secrets from 1Password
@@ -111,13 +111,13 @@ Most "production-ready" AI deployments want you to spend $100-500/month on manag
 **One VPS. Three scripts. That's it.**
 
 I don't use:
-- Kubernetes (overkill for a single container)
+- Kubernetes (overkill for a single service)
 - Terraform (harder to debug than a bash script)
-- Docker Compose (unnecessary abstraction layer)
+- Docker (unnecessary layer when running on a VPS you control)
 - Configuration management tools (you have SSH)
 
 Instead:
-- Direct `docker run` commands you can understand
+- Node.js + systemd running OpenClaw directly on the VPS
 - Plain bash scripts you can edit in 5 minutes
 - SSH tunnels instead of complex network setups
 - Standard Linux tools everyone knows
@@ -146,7 +146,7 @@ The threat model is simple: prevent unauthorized access, protect secrets, keep s
 ┌─────────────────┐     ┌─────────────────┐
 │  Hetzner VPS    │────▶│  1Password      │
 │  Ubuntu 24.04   │     │  (secrets)      │
-│  - Docker       │     └─────────────────┘
+│  - systemd      │     └─────────────────┘
 │  - UFW firewall │
 │  - fail2ban     │     ┌─────────────────┐
 └────────┬────────┘────▶│  OpenCode Zen   │
@@ -267,7 +267,7 @@ ssh deploy@$(hcloud server ip openclaw) 'bash -s' < oc-configure.sh
 
 ```
 .
-├── oc-bootstrap.sh           # Server hardening and Docker setup
+├── oc-bootstrap.sh           # Server hardening and Node.js/OpenClaw setup
 ├── oc-configure.sh           # OpenClaw installation and config
 ├── oc-load-secrets.sh        # 1Password secret loader (optional)
 ├── openclaw.json.example     # Configuration template

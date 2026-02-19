@@ -22,7 +22,7 @@
 #     TODOIST_API_KEY=${TODOIST_API_KEY:-}
 #     EMAIL_APP_PASSWORD=${EMAIL_APP_PASSWORD:-}
 #     EOF
-#     scp .env deploy@<VPS_IP>:~/openclaw/.env
+#     scp .env deploy@<VPS_IP>:~/.openclaw/.env
 #
 #   Option 2: Run directly on VPS (RECOMMENDED)
 #     # After bootstrap, copy script to VPS:
@@ -310,11 +310,7 @@ ok "All secrets loaded successfully!"
 echo ""
 echo "Next steps:"
 echo "  1. Copy the secrets to your VPS:"
-echo "     scp .env deploy@<VPS_IP>:~/openclaw/.env"
+echo "     scp .env deploy@<VPS_IP>:~/.openclaw/.env"
 echo "  2. SSH to your VPS: ssh deploy@<VPS_IP>"
 echo "  3. Run: ./oc-configure.sh"
-echo ""
-echo "⚠️  IMPORTANT: Telegram Bug Workaround"
-echo "   OpenClaw v2026.2.9 has a bug that prevents Telegram from polling."
-echo "   The configure script will automatically downgrade to v2026.2.6."
 echo ""

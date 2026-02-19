@@ -126,7 +126,7 @@ else
 fi
 
 # Check for TODO/FIXME
-if grep -rn "TODO\|FIXME\|XXX" oc-*.sh 2>/dev/null | grep -v "# TODO:\|# FIXME:\|Check for TODO"; then
+if grep -rn "\bTODO\b\|\bFIXME\b\|\bXXX\b" oc-*.sh 2>/dev/null | grep -v "# TODO:\|# FIXME:\|Check for TODO"; then
     fail "Found TODO/FIXME markers"
 else
     ok "No TODO/FIXME markers found"

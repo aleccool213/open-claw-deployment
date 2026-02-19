@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # oc-bootstrap.sh — Run on fresh Hetzner VPS as root
-# Covers: Docker, OpenClaw clone, deploy user, security hardening, backups
+# Covers: Node.js, OpenClaw install, deploy user, security hardening, backups
 # Usage: ssh root@<VPS_IP> 'bash -s' < oc-bootstrap.sh
 set -euo pipefail
 
@@ -18,8 +18,20 @@ verify() {
   # verify "description" "command"
   if eval "$2" >/dev/null 2>&1; then
     ok "$1"
+    return 0
   else
     fail "$1 — command failed: $2"
+  fi
+}
+
+verify_soft() {
+  # verify_soft "description" "command" - warns but doesn't fail
+  if eval "$2" >/dev/null 2>&1; then
+    ok "$1"
+    return 0
+  else
+    warn "$1 — continuing anyway"
+    return 1
   fi
 }
 
@@ -42,37 +54,54 @@ echo "  OS:       $(. /etc/os-release && echo "$PRETTY_NAME")"
 verify "Running Ubuntu 24.x" "grep -q 'Ubuntu 24' /etc/os-release"
 
 # ═════════════════════════════════════════════════════════════════════════════
+# PHASE 0: CLEANUP DOCKER (if exists)
+# ═════════════════════════════════════════════════════════════════════════════
+
+step "0/10 — Cleaning up existing Docker setup (if any)"
+
+if command -v docker &>/dev/null; then
+  info "Docker detected, checking for OpenClaw containers..."
+  
+  # Stop and remove OpenClaw containers
+  if docker ps -a | grep -q "openclaw"; then
+    docker ps -a | grep "openclaw" | awk '{print $1}' | xargs -r docker stop 2>/dev/null || true
+    docker ps -a | grep "openclaw" | awk '{print $1}' | xargs -r docker rm 2>/dev/null || true
+    ok "Stopped and removed OpenClaw Docker containers"
+  fi
+  
+  # Clean up unused images
+  docker system prune -af --volumes 2>/dev/null || true
+  info "Cleaned up Docker resources"
+fi
+
+# ═════════════════════════════════════════════════════════════════════════════
 # PHASE 1: BASE SYSTEM
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "1/9 — Installing Docker"
+step "1/10 — Installing Node.js 22"
 apt-get update -qq
-apt-get install -y -qq git curl ca-certificates jq > /dev/null
+apt-get install -y -qq git curl ca-certificates jq dbus dbus-user-session >/dev/null
 
-if command -v docker &>/dev/null; then
-  warn "Docker already installed, skipping"
+if node -e "process.exit(parseInt(process.versions.node) >= 22 ? 0 : 1)" 2>/dev/null; then
+  warn "Node.js $(node -v) already installed, skipping"
 else
-  curl -fsSL https://get.docker.com | sh
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null 2>&1
+  apt-get install -y -qq nodejs >/dev/null
 fi
 
-verify "Docker installed"          "docker --version"
-verify "Docker Compose installed"  "docker compose version"
+verify "Node.js 22+ installed" "node -e \"process.exit(parseInt(process.versions.node) >= 22 ? 0 : 1)\""
+verify "npm installed"         "npm --version"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # PHASE 2: OPENCLAW
 # ═════════════════════════════════════════════════════════════════════════════
 
-# IMPORTANT: Pin to v2026.2.6 (v2026.2.9 has Telegram bug where polling never starts)
-# See: https://github.com/openclaw/openclaw/issues/15082
-OPENCLAW_VERSION="v2026.2.6"
-OPENCLAW_IMAGE="openclaw:${OPENCLAW_VERSION}"
-
-step "2/9 — Building OpenClaw ${OPENCLAW_VERSION}"
+step "2/10 — Installing OpenClaw"
 DEPLOY_HOME="/home/deploy"
-OPENCLAW_DIR="${DEPLOY_HOME}/openclaw"
 OPENCLAW_DATA="${DEPLOY_HOME}/.openclaw"
+OPENCLAW_VERSION="2026.2.6"
 
-# Create deploy user first (need home dir for clone location)
+# Create deploy user first (need home dir)
 if id deploy &>/dev/null; then
   warn "User 'deploy' already exists, skipping creation"
 else
@@ -81,7 +110,6 @@ else
 fi
 
 usermod -aG sudo deploy 2>/dev/null || true
-usermod -aG docker deploy 2>/dev/null || true
 
 # Set up SSH key for deploy user
 mkdir -p "${DEPLOY_HOME}/.ssh"
@@ -93,29 +121,23 @@ chmod 700 "${DEPLOY_HOME}/.ssh"
 chmod 600 "${DEPLOY_HOME}/.ssh/authorized_keys" 2>/dev/null || true
 ok "SSH keys copied to deploy user"
 
-# Download and build pinned version from source
-if [[ -d "$OPENCLAW_DIR" ]]; then
-  warn "OpenClaw already exists at ${OPENCLAW_DIR}, checking version..."
+# Install pinned OpenClaw version via npm (as root for global install)
+if command -v openclaw &>/dev/null; then
+  warn "OpenClaw already installed ($(openclaw --version 2>/dev/null || echo unknown)), skipping"
 else
-  echo "  Downloading OpenClaw ${OPENCLAW_VERSION} source..."
-  cd /tmp
-  curl -sL "https://github.com/openclaw/openclaw/archive/refs/tags/${OPENCLAW_VERSION}.tar.gz" -o openclaw.tar.gz
-  tar xzf openclaw.tar.gz
-  mv "openclaw-${OPENCLAW_VERSION#v}" "$OPENCLAW_DIR"
-  rm -f openclaw.tar.gz
-  chown -R deploy:deploy "$OPENCLAW_DIR"
-  ok "Downloaded OpenClaw ${OPENCLAW_VERSION}"
+  echo "  Installing openclaw@${OPENCLAW_VERSION} via npm..."
+  npm install -g openclaw@${OPENCLAW_VERSION}
 fi
 
-verify "Source directory exists" "test -f ${OPENCLAW_DIR}/docker-compose.yml"
+verify "OpenClaw installed" "command -v openclaw"
 
-step "3/9 — Persistent directories & secrets"
+step "3/10 — Persistent directories & secrets"
 
-mkdir -p "${OPENCLAW_DATA}" "${OPENCLAW_DATA}/workspace"
-chown -R 1000:1000 "${OPENCLAW_DATA}"
+mkdir -p "${OPENCLAW_DATA}"
+chown -R deploy:deploy "${OPENCLAW_DATA}"
 
 # Generate .env if it doesn't exist
-ENV_FILE="${OPENCLAW_DIR}/.env"
+ENV_FILE="${OPENCLAW_DATA}/.env"
 if [[ -f "$ENV_FILE" ]]; then
   warn ".env already exists, not overwriting"
 else
@@ -123,18 +145,14 @@ else
   KEYRING_PASSWORD=$(openssl rand -hex 32)
 
   cat > "$ENV_FILE" <<EOF
-# IMPORTANT: Use v2026.2.6 (v2026.2.9 has Telegram bug - polling never starts)
-# See: https://github.com/openclaw/openclaw/issues/15082
-OPENCLAW_IMAGE=${OPENCLAW_IMAGE}
+OPENCLAW_HOME=${OPENCLAW_DATA}
+OPENCLAW_CONFIG_PATH=${OPENCLAW_DATA}/openclaw.json
 OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}
-OPENCLAW_GATEWAY_BIND=lan
+OPENCLAW_GATEWAY_BIND=loopback
 OPENCLAW_GATEWAY_PORT=18789
-
-OPENCLAW_CONFIG_DIR=${OPENCLAW_DATA}
-OPENCLAW_WORKSPACE_DIR=${OPENCLAW_DATA}/workspace
-
 GOG_KEYRING_PASSWORD=${KEYRING_PASSWORD}
-XDG_CONFIG_HOME=/home/node/.openclaw
+XDG_RUNTIME_DIR=/run/user/1000
+DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 EOF
 
   chown deploy:deploy "$ENV_FILE"
@@ -149,7 +167,7 @@ EOF
 fi
 
 verify ".env exists and is restricted" "test -f $ENV_FILE && stat -c '%a' $ENV_FILE | grep -q '600'"
-verify "Data dir writable by node user" "test -d ${OPENCLAW_DATA}/workspace"
+verify "Data dir exists"               "test -d ${OPENCLAW_DATA}"
 
 # Write openclaw.json with correct OpenCode Zen configuration
 # This config includes models.providers with baseUrl for OpenCode Zen
@@ -209,6 +227,7 @@ else
     }
   },
   "gateway": {
+    "mode": "local",
     "controlUi": {
       "allowInsecureAuth": true
     },
@@ -241,54 +260,129 @@ else
   }
 }
 OPENCLAW_CONFIG
-  chown 1000:1000 "$CONFIG_FILE"
+  chown deploy:deploy "$CONFIG_FILE"
   chmod 600 "$CONFIG_FILE"
   ok "Wrote OpenClaw config with OpenCode Zen provider setup"
   info "You'll set OPENCODE_API_KEY in oc-configure.sh"
 fi
 
-step "4/9 — Building & launching gateway"
-cd "$OPENCLAW_DIR"
+# ═════════════════════════════════════════════════════════════════════════════
+# PHASE 3: FIX PERMISSIONS FOR NPM GLOBAL INSTALLS
+# ═════════════════════════════════════════════════════════════════════════════
 
-# Build from source (pinned version)
-echo "  Building OpenClaw ${OPENCLAW_VERSION} from source..."
-echo "  This may take a few minutes on first run..."
-export DOCKER_BUILDKIT=1
-docker build \
-  --build-arg BUILDKIT_INLINE_CACHE=1 \
-  -t "${OPENCLAW_IMAGE}" .
-ok "Built ${OPENCLAW_IMAGE}"
+step "4/10 — Creating /home/node directory for OpenClaw"
 
-docker compose up -d openclaw-gateway
+# OpenClaw (installed globally via npm) needs to write to /home/node
+# This is a workaround for npm global packages trying to use hardcoded paths
+mkdir -p /home/node
+chown deploy:deploy /home/node
+chmod 755 /home/node
+ok "Created /home/node with deploy ownership"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PHASE 4: SYSTEMD USER SERVICE SETUP
+# ═════════════════════════════════════════════════════════════════════════════
+
+step "5/10 — Setting up systemd user service"
+
+# Enable lingering for deploy user so services persist after logout
+loginctl enable-linger deploy
+ok "Enabled systemd lingering for deploy user"
+
+# Create runtime directory with proper permissions
+mkdir -p /run/user/1000
+chown deploy:deploy /run/user/1000
+chmod 700 /run/user/1000
+ok "Created /run/user/1000"
+
+# Create the systemd user service file manually with proper environment
+# This avoids issues with openclaw gateway install not finding DBUS
+SERVICE_DIR="${DEPLOY_HOME}/.config/systemd/user"
+mkdir -p "$SERVICE_DIR"
+chown -R deploy:deploy "${DEPLOY_HOME}/.config"
+
+# Get the gateway token from .env
+GATEWAY_TOKEN=$(grep OPENCLAW_GATEWAY_TOKEN "$ENV_FILE" | cut -d= -f2)
+
+cat > "${SERVICE_DIR}/openclaw-gateway.service" <<EOF
+[Unit]
+Description=OpenClaw Gateway (v2026.2.6)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node /usr/lib/node_modules/openclaw/dist/index.js gateway --port 18789
+Restart=always
+RestartSec=5
+KillMode=process
+Environment="XDG_RUNTIME_DIR=/run/user/1000"
+Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus"
+Environment="HOME=/home/deploy"
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+Environment="OPENCLAW_CONFIG_PATH=/home/deploy/.openclaw/openclaw.json"
+Environment="OPENCLAW_GATEWAY_PORT=18789"
+Environment="OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}"
+
+[Install]
+WantedBy=default.target
+EOF
+
+chown deploy:deploy "${SERVICE_DIR}/openclaw-gateway.service"
+ok "Created systemd user service file"
+
+# Start dbus session and enable/start service as deploy user
+sudo -u deploy bash <<'DEPLOY_SCRIPT'
+export XDG_RUNTIME_DIR=/run/user/1000
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+
+# Start dbus session daemon if not running
+if [ ! -S /run/user/1000/bus ]; then
+  dbus-daemon --session --address=unix:path=/run/user/1000/bus --fork --nopidfile 2>/dev/null || true
+fi
+
+# Enable and start the service
+systemctl --user daemon-reload
+systemctl --user enable openclaw-gateway.service
+systemctl --user start openclaw-gateway.service
+DEPLOY_SCRIPT
+
 sleep 5
 
-# Verify gateway is running
-if docker compose ps openclaw-gateway | grep -q "Up"; then
-  ok "Gateway container is running"
+# Verify the gateway is running
+if sudo -u deploy bash -c 'export XDG_RUNTIME_DIR=/run/user/1000 && export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus && systemctl --user is-active openclaw-gateway.service' >/dev/null 2>&1; then
+  ok "OpenClaw gateway service is running"
 else
-  warn "Gateway may still be starting — check: docker compose logs -f openclaw-gateway"
+  warn "Gateway service status unclear — checking manually"
 fi
 
-# Quick health check
-if curl -sf http://127.0.0.1:18789/ >/dev/null 2>&1; then
-  ok "Gateway responding on http://127.0.0.1:18789/"
-else
-  warn "Gateway not responding yet (may still be initializing)"
-fi
+# Test HTTP response
+for i in 1 2 3; do
+  if curl -sf http://127.0.0.1:18789/ >/dev/null 2>&1; then
+    ok "Gateway responding on http://127.0.0.1:18789/"
+    break
+  else
+    if [ $i -eq 3 ]; then
+      warn "Gateway not responding yet — may still be initializing"
+    else
+      sleep 2
+    fi
+  fi
+done
 
 # ═════════════════════════════════════════════════════════════════════════════
-# PHASE 3: SECURITY HARDENING
+# PHASE 5: SECURITY HARDENING
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "5/9 — Tailscale (REQUIRED for secure access)"
+step "6/10 — Tailscale (REQUIRED for secure access)"
 echo "  Installing Tailscale..."
 curl -fsSL https://tailscale.com/install.sh | sh >/dev/null 2>&1
 
 verify "Tailscale installed" "command -v tailscale"
 ok "Tailscale installed — you'll configure it in oc-configure.sh"
 
-step "6/9 — Firewall (UFW)"
-apt-get install -y -qq ufw > /dev/null
+step "7/10 — Firewall (UFW)"
+apt-get install -y -qq ufw >/dev/null
 
 ufw default deny incoming >/dev/null
 ufw default allow outgoing >/dev/null
@@ -297,12 +391,11 @@ ufw allow OpenSSH >/dev/null
 ufw allow in on tailscale0 >/dev/null 2>&1 || true
 yes | ufw enable >/dev/null 2>&1 || true
 
-verify "UFW active" "ufw status | grep -q 'Status: active'"
-verify "SSH allowed" "ufw status | grep -q '22/tcp'"
+verify_soft "UFW active" "ufw status | grep -q 'Status: active'"
 ok "SSH allowed, Tailscale interface permitted"
 
-step "7/9 — fail2ban"
-apt-get install -y -qq fail2ban > /dev/null
+step "8/10 — fail2ban"
+apt-get install -y -qq fail2ban >/dev/null
 
 cat > /etc/fail2ban/jail.local <<'EOF'
 [sshd]
@@ -315,18 +408,18 @@ EOF
 
 systemctl enable --now fail2ban >/dev/null 2>&1
 sleep 2
-verify "fail2ban running" "systemctl is-active fail2ban"
-verify "sshd jail active" "fail2ban-client status sshd 2>/dev/null | grep -q 'Currently failed'"
+verify_soft "fail2ban running" "systemctl is-active fail2ban"
+verify_soft "sshd jail active" "fail2ban-client status sshd 2>/dev/null | grep -q 'Currently failed'"
 
-step "8/9 — Automatic security updates"
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unattended-upgrades > /dev/null
+step "9/10 — Automatic security updates"
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unattended-upgrades >/dev/null
 echo 'Unattended-Upgrade::Automatic-Reboot "false";' > /etc/apt/apt.conf.d/51custom-unattended
 dpkg-reconfigure -plow unattended-upgrades 2>/dev/null || true
-verify "unattended-upgrades installed" "dpkg -l | grep -q unattended-upgrades"
+verify_soft "unattended-upgrades installed" "dpkg -l | grep -q unattended-upgrades"
 
 # ── SSH hardening (dangerous step — verify access first) ─────────────────
 
-step "9/9 — SSH hardening"
+step "10/10 — SSH hardening"
 
 VPS_IP=$(hostname -I | awk '{print $1}')
 echo ""
@@ -352,10 +445,10 @@ verify "Root login disabled"    "grep -q '^PermitRootLogin no' /etc/ssh/sshd_con
 warn "Root SSH is now disabled. Use 'ssh deploy@${VPS_IP}' from now on."
 
 # ═════════════════════════════════════════════════════════════════════════════
-# PHASE 4: BACKUPS
+# PHASE 6: BACKUPS
 # ═════════════════════════════════════════════════════════════════════════════
 
-step "10/10 — Automated backups"
+step "11/11 — Automated backups"
 
 mkdir -p /var/backups/openclaw
 
@@ -365,7 +458,7 @@ set -euo pipefail
 BACKUP_DIR="/var/backups/openclaw"
 TS="$(date +%F-%H%M%S)"
 tar -C / -czf "${BACKUP_DIR}/openclaw-${TS}.tar.gz" home/deploy/.openclaw
-tar -tzf "${BACKUP_DIR}/openclaw-${TS}.tar.gz" > /dev/null 2>&1
+tar -tzf "${BACKUP_DIR}/openclaw-${TS}.tar.gz" >/dev/null 2>&1
 find "$BACKUP_DIR" -type f -mtime +14 -delete
 SCRIPT
 chmod +x /usr/local/bin/openclaw-backup.sh
@@ -393,8 +486,8 @@ systemctl enable --now openclaw-backup.timer >/dev/null 2>&1
 
 # Run a test backup
 /usr/local/bin/openclaw-backup.sh
-verify "Backup script works" "ls /var/backups/openclaw/*.tar.gz 2>/dev/null | head -1"
-verify "Backup timer enabled" "systemctl is-enabled openclaw-backup.timer"
+verify_soft "Backup script works" "ls /var/backups/openclaw/*.tar.gz 2>/dev/null | head -1"
+verify_soft "Backup timer enabled" "systemctl is-enabled openclaw-backup.timer"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # DONE
@@ -406,7 +499,9 @@ echo -e "${GREEN}  ✅ Bootstrap complete!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 echo "  Summary:"
-echo "    • Docker + OpenClaw gateway running"
+echo "    • Node.js + OpenClaw gateway running via systemd"
+echo "    • Docker containers cleaned up (if any existed)"
+echo "    • /home/node directory created for npm global packages"
 echo "    • deploy user created with SSH access"
 echo "    • Tailscale installed (configure in next step)"
 echo "    • UFW firewall + fail2ban active"

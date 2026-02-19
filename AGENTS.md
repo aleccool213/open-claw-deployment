@@ -19,11 +19,10 @@ Heartbeats are periodic check-ins OpenClaw does to maintain context and keep the
 | Configure (deploy) | `ssh deploy@<IP> 'bash -s' < oc-configure.sh` |
 | SSH to VPS | `ssh deploy@$(hcloud server ip openclaw)` |
 | Open tunnel | `ssh -N -L 18789:127.0.0.1:18789 deploy@<IP>` |
-| View logs | `ssh deploy@<IP> "cd ~/openclaw && docker compose logs -f openclaw-gateway"` |
-| Restart gateway | `ssh deploy@<IP> "cd ~/openclaw && docker compose restart openclaw-gateway"` |
+| View logs | `ssh deploy@<IP> "journalctl -u openclaw -f"` |
+| Restart gateway | `ssh deploy@<IP> "sudo systemctl restart openclaw"` |
 | Trigger backup | `sudo /usr/local/bin/openclaw-backup.sh` |
-| Run health check | `ssh deploy@<IP> "~/openclaw/monitor.sh"` |
-| View monitor logs | `ssh deploy@<IP> "tail -f /var/log/openclaw-monitor.log"` |
+
 
 ## Deployment Workflow
 
@@ -38,7 +37,7 @@ Heartbeats are periodic check-ins OpenClaw does to maintain context and keep the
    ```bash
    ssh root@<IP> 'bash -s' < oc-bootstrap.sh
    ```
-   This installs Docker, creates deploy user, builds OpenClaw v2026.2.6, and sets up security.
+   This installs Node.js 22, installs OpenClaw via the official installer, creates the deploy user, and sets up security.
 
 3. **Load Secrets** (run on VPS as deploy user)
    ```bash
@@ -73,7 +72,7 @@ TAILSCALE_AUTH_KEY=$TAILSCALE_AUTH_KEY
 EOF
 
 # Copy to VPS
-scp .env deploy@<IP>:~/openclaw/.env
+scp .env deploy@<IP>:~/.openclaw/.env
 ```
 
 **Note**: Running on the VPS is recommended because the secrets are immediately available without manual copying.
@@ -85,7 +84,6 @@ scp .env deploy@<IP>:~/openclaw/.env
 ├── oc-bootstrap.sh              # Run once as root on fresh VPS
 ├── oc-configure.sh              # Run as deploy user to configure integrations
 ├── oc-load-secrets.sh           # (Optional) Load secrets from 1Password CLI
-├── monitor.sh                   # Health monitoring (cron every 5 min)
 ├── openclaw.json.example        # OpenClaw configuration template (OpenCode Zen)
 └── openclaw-hetzner-checklist.md # Complete deployment checklist
 ```
@@ -100,29 +98,25 @@ scp .env deploy@<IP>:~/openclaw/.env
 
 ### User Model
 - `root`: Used only for initial bootstrap, then disabled
-- `deploy`: Non-root user for running OpenClaw (member of `docker` group)
-- Container runs as UID 1000 (`node` user inside)
+- `deploy`: Non-root user that runs the `openclaw` systemd service
 
 ### Data Persistence
-All durable state lives on the host, not in containers:
+All durable state lives in the deploy user's home directory:
 - Config: `/home/deploy/.openclaw/openclaw.json`
-- Workspace: `/home/deploy/.openclaw/workspace/`
-- Secrets: `/home/deploy/openclaw/.env` (chmod 600)
+- Secrets: `/home/deploy/.openclaw/.env` (chmod 600, loaded by systemd)
 - Backups: `/var/backups/openclaw/` (daily at 03:00 UTC)
 
 ## Key Configuration Files
 
 ### Environment Variables (.env)
-Located at `/home/deploy/openclaw/.env`:
+Located at `/home/deploy/.openclaw/.env` — loaded directly by systemd at startup:
 ```bash
-OPENCLAW_IMAGE=openclaw:v2026.2.6  # Use v2026.2.6 (v2026.2.9 has Telegram bug)
+OPENCLAW_HOME=/home/deploy/.openclaw
+OPENCLAW_CONFIG_PATH=/home/deploy/.openclaw/openclaw.json
 OPENCLAW_GATEWAY_TOKEN=<32-byte-hex>  # Save this! Used for web UI auth
-OPENCLAW_GATEWAY_BIND=lan
+OPENCLAW_GATEWAY_BIND=loopback
 OPENCLAW_GATEWAY_PORT=18789
-OPENCLAW_CONFIG_DIR=/home/deploy/.openclaw
-OPENCLAW_WORKSPACE_DIR=/home/deploy/.openclaw/workspace
 GOG_KEYRING_PASSWORD=<32-byte-hex>
-XDG_CONFIG_HOME=/home/node/.openclaw
 
 # Added by oc-configure.sh (REQUIRED):
 OPENCODE_API_KEY=sk-...  # OpenCode Zen API key
@@ -239,20 +233,6 @@ source ./oc-load-secrets.sh
 
 ## Known Issues & Workarounds
 
-### Telegram Bug in v2026.2.9
-OpenClaw v2026.2.9 has a bug where Telegram shows "configured, not enabled yet" and never starts polling.
-
-**Workaround**: Use v2026.2.6 (built from source):
-```bash
-cd /tmp
-curl -sL https://github.com/openclaw/openclaw/archive/refs/tags/v2026.2.6.tar.gz -o openclaw.tar.gz
-tar xzf openclaw.tar.gz
-cd openclaw-2026.2.6
-docker build -t openclaw:v2026.2.6 .
-```
-
-Then set `OPENCLAW_IMAGE=openclaw:v2026.2.6` in `.env`.
-
 ### Web UI "pairing required" Error
 If you get "disconnected (1008): pairing required", add to config:
 ```json
@@ -289,9 +269,9 @@ _oc_ip() { hcloud server ip "$OPENCLAW_VPS" 2>/dev/null; }
 alias ocs='ssh deploy@$(_oc_ip)'
 alias oct='ssh -f -N -L 18789:127.0.0.1:18789 deploy@$(_oc_ip) && echo "Tunnel open → http://127.0.0.1:18789/"'
 alias octk='pkill -f "ssh -f -N -L 18789:127.0.0.1:18789" 2>/dev/null && echo "Tunnel closed"'
-alias ocl='ssh deploy@$(_oc_ip) "cd ~/openclaw && docker compose logs -f --tail 100 openclaw-gateway"'
-alias ocst='ssh deploy@$(_oc_ip) "cd ~/openclaw && docker compose ps openclaw-gateway"'
-alias ocr='ssh deploy@$(_oc_ip) "cd ~/openclaw && docker compose restart openclaw-gateway"'
+alias ocl='ssh deploy@$(_oc_ip) "journalctl -u openclaw -f --lines 100"'
+alias ocst='ssh deploy@$(_oc_ip) "systemctl status openclaw"'
+alias ocr='ssh deploy@$(_oc_ip) "sudo systemctl restart openclaw"'
 alias och='ssh deploy@$(_oc_ip) "curl -sf http://127.0.0.1:18789/ > /dev/null && echo ✅ || echo ❌"'
 alias ocon='hcloud server poweron $OPENCLAW_VPS'
 alias ocoff='hcloud server poweroff $OPENCLAW_VPS'
@@ -305,53 +285,20 @@ Before considering deployment complete:
 - [ ] Root login disabled via SSH
 - [ ] fail2ban active and monitoring SSH
 - [ ] UFW enabled, only port 22 allowed
-- [ ] Docker ports bound to 127.0.0.1 (not 0.0.0.0)
+- [ ] Gateway bound to loopback only (`OPENCLAW_GATEWAY_BIND=loopback`)
 - [ ] `.env` file chmod 600, not in git
 - [ ] No secrets in logs or shell history
-- [ ] Container running as non-root (UID 1000)
+- [ ] systemd service running as `deploy` (non-root)
 - [ ] Automated backups tested manually
 - [ ] Can SSH as deploy user from second terminal
-- [ ] Health monitoring cron job configured
-
-## Health Monitoring
-
-The `monitor.sh` script runs every 5 minutes via cron and checks:
-- Gateway container status
-- HTTP response from gateway
-- Heartbeat within last 3 hours
-
-### What it does:
-- **Auto-restarts** gateway if it's down
-- **Sends Telegram alerts** to your paired chat if issues detected
-- **Logs** to `/var/log/openclaw-monitor.log`
-
-### Manual commands:
-```bash
-# Run health check manually
-ssh deploy@<IP> "~/openclaw/monitor.sh"
-
-# View monitor logs
-ssh deploy@<IP> "tail -f /var/log/openclaw-monitor.log"
-
-# Check cron job
-ssh deploy@<IP> "crontab -l"
-```
-
-### Troubleshooting
-
-If monitoring isn't working:
-1. Check cron is running: `ssh deploy@<IP> "crontab -l"`
-2. Check log file exists: `ssh deploy@<IP> "ls -la /var/log/openclaw-monitor.log"`
-3. Run manually to debug: `ssh deploy@<IP> "bash -x ~/openclaw/monitor.sh"`
-
 ## Troubleshooting
 
 ### Gateway not responding
 ```bash
 ssh deploy@<IP>
-cd ~/openclaw
-docker compose logs -f openclaw-gateway
-docker compose ps
+systemctl status openclaw
+journalctl -u openclaw -f
+sudo systemctl restart openclaw
 ```
 
 ### Can't SSH after hardening
@@ -362,8 +309,7 @@ docker compose ps
 ### Telegram bot not responding
 - Check token: `curl https://api.telegram.org/bot<TOKEN>/getMe`
 - Verify IPv6 routing if on Hetzner: `curl -6 https://api.telegram.org`
-- Check gateway logs for pairing requests
-- Ensure using v2026.2.6 (v2026.2.9 has Telegram bug)
+- Check gateway logs: `journalctl -u openclaw -f`
 
 ### 1Password not working
 - Verify service account token: `op vault list`
@@ -379,17 +325,15 @@ docker compose ps
 ### Rotate gateway token
 ```bash
 NEW_TOKEN=$(openssl rand -hex 32)
-# Update .env with new OPENCLAW_GATEWAY_TOKEN
-cd ~/openclaw && docker compose up -d --force-recreate openclaw-gateway
+# Update OPENCLAW_GATEWAY_TOKEN in ~/.openclaw/.env, then:
+sudo systemctl restart openclaw
 ```
 
 ### Update OpenClaw
 ```bash
 ssh deploy@<IP>
-cd ~/openclaw
-git pull --ff-only
-docker compose build
-docker compose up -d openclaw-gateway
+npm update -g openclaw
+sudo systemctl restart openclaw
 ```
 
 ### Restore from backup

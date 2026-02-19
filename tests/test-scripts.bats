@@ -63,14 +63,23 @@ setup() {
     grep -q "must be run as root" "${SCRIPT_DIR}/oc-bootstrap.sh"
 }
 
-@test "bootstrap script installs Docker" {
-    grep -q "get.docker.com" "${SCRIPT_DIR}/oc-bootstrap.sh"
-    grep -q "docker --version" "${SCRIPT_DIR}/oc-bootstrap.sh"
+@test "bootstrap script installs Node.js 22" {
+    grep -q "nodesource.com" "${SCRIPT_DIR}/oc-bootstrap.sh"
+    grep -q "nodejs" "${SCRIPT_DIR}/oc-bootstrap.sh"
+}
+
+@test "bootstrap script installs pinned OpenClaw version via npm" {
+    grep -q "OPENCLAW_VERSION=" "${SCRIPT_DIR}/oc-bootstrap.sh"
+    grep -q "npm install -g openclaw@" "${SCRIPT_DIR}/oc-bootstrap.sh"
+}
+
+@test "bootstrap script creates systemd service" {
+    grep -q "openclaw-gateway.service" "${SCRIPT_DIR}/oc-bootstrap.sh"
+    grep -q "systemctl enable" "${SCRIPT_DIR}/oc-bootstrap.sh"
 }
 
 @test "bootstrap script creates deploy user" {
     grep -q "adduser.*deploy" "${SCRIPT_DIR}/oc-bootstrap.sh"
-    grep -q "usermod -aG docker deploy" "${SCRIPT_DIR}/oc-bootstrap.sh"
 }
 
 @test "bootstrap script sets up UFW firewall" {
@@ -144,10 +153,6 @@ setup() {
     grep -q "Validating secrets" "${SCRIPT_DIR}/oc-load-secrets.sh"
     grep -q "opencode.ai/zen" "${SCRIPT_DIR}/oc-load-secrets.sh"
     grep -q "telegram.org" "${SCRIPT_DIR}/oc-load-secrets.sh"
-}
-
-@test "load secrets script documents Telegram bug workaround" {
-    grep -q "Telegram Bug Workaround" "${SCRIPT_DIR}/oc-load-secrets.sh"
 }
 
 # ── Security Tests ────────────────────────────────────────────────────────────
