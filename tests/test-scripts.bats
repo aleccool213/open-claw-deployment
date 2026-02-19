@@ -74,7 +74,7 @@ setup() {
 }
 
 @test "bootstrap script creates systemd service" {
-    grep -q "openclaw.service" "${SCRIPT_DIR}/oc-bootstrap.sh"
+    grep -q "openclaw-gateway.service" "${SCRIPT_DIR}/oc-bootstrap.sh"
     grep -q "systemctl enable" "${SCRIPT_DIR}/oc-bootstrap.sh"
 }
 
