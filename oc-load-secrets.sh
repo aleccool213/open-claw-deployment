@@ -18,6 +18,7 @@
 #     TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN
 #     OP_SERVICE_ACCOUNT_TOKEN=$OP_SERVICE_ACCOUNT_TOKEN
 #     TAILSCALE_AUTH_KEY=$TAILSCALE_AUTH_KEY
+#     GITHUB_TOKEN=${GITHUB_TOKEN:-}
 #     NOTION_API_KEY=${NOTION_API_KEY:-}
 #     TODOIST_API_KEY=${TODOIST_API_KEY:-}
 #     EMAIL_APP_PASSWORD=${EMAIL_APP_PASSWORD:-}
@@ -44,6 +45,7 @@
 #   - "tailscale auth key" — field: credential
 #
 # OPTIONAL 1PASSWORD ITEMS:
+#   - "github pat" — field: credential
 #   - "notion api key" — field: credential
 #   - "todoist api token" — field: credential
 #   - "google service account" — field: app password (used by Himalaya at runtime)
@@ -53,6 +55,7 @@
 #   - TELEGRAM_BOT_TOKEN
 #   - OP_SERVICE_ACCOUNT_TOKEN
 #   - TAILSCALE_AUTH_KEY
+#   - GITHUB_TOKEN (optional)
 #   - NOTION_API_KEY (optional)
 #   - TODOIST_API_KEY (optional)
 #   - EMAIL_APP_PASSWORD (optional)
@@ -242,6 +245,7 @@ fetch_secret "1password service account" "credential" "OP_SERVICE_ACCOUNT_TOKEN"
 fetch_secret "tailscale auth key" "credential" "TAILSCALE_AUTH_KEY" || return 1
 
 # Fetch optional secrets
+fetch_secret "github pat" "credential" "GITHUB_TOKEN" "true"
 fetch_secret "notion api key" "credential" "NOTION_API_KEY" "true"
 fetch_secret "todoist api token" "credential" "TODOIST_API_KEY" "true"
 fetch_secret "google service account" "app password" "EMAIL_APP_PASSWORD" "true"
@@ -286,6 +290,12 @@ echo "  ✓ OPENCODE_API_KEY=${OPENCODE_API_KEY:0:12}..."
 echo "  ✓ TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:0:12}..."
 echo "  ✓ OP_SERVICE_ACCOUNT_TOKEN=${OP_SERVICE_ACCOUNT_TOKEN:0:12}..."
 echo "  ✓ TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY:0:12}..."
+
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    echo "  ✓ GITHUB_TOKEN=${GITHUB_TOKEN:0:12}..."
+else
+    echo "  − GITHUB_TOKEN (not set, optional for GitHub integration)"
+fi
 
 if [[ -n "${NOTION_API_KEY:-}" ]]; then
     echo "  ✓ NOTION_API_KEY=${NOTION_API_KEY:0:12}..."
