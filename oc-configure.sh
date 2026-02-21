@@ -496,8 +496,8 @@ ok ".env updated with all secrets"
 step "Restarting gateway with new config"
 
 # Ensure dbus session is running
-if [ ! -S /run/user/$(id -u)/bus ]; then
-  dbus-daemon --session --address=unix:path=/run/user/$(id -u)/bus --fork --nopidfile 2>/dev/null || true
+if [ ! -S /run/user/"$(id -u)"/bus ]; then
+  dbus-daemon --session --address=unix:path=/run/user/"$(id -u)"/bus --fork --nopidfile 2>/dev/null || true
 fi
 
 # Reload and restart

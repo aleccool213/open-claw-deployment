@@ -320,6 +320,33 @@ sudo systemctl restart openclaw
 - Check available models: `curl -sf https://opencode.ai/zen/v1/models -H "Authorization: Bearer $OPENCODE_API_KEY" | jq -r '.data[].id'`
 - Ensure model format is `opencode/<model>`
 
+### Gateway keeps crashing / Telegram not responding
+If the gateway continuously restarts with errors like:
+```
+Invalid --bind (use "loopback", "lan", "tailnet", "auto", or "custom")
+```
+
+**Cause**: OpenClaw's `gateway install` command may have overwritten the systemd service file with invalid bind parameters.
+
+**Fix**:
+```bash
+ssh deploy@<IP>
+export XDG_RUNTIME_DIR=/run/user/1000
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+
+# Fix the service file
+sed -i 's/--bind 0.0.0.0/--bind loopback/' ~/.config/systemd/user/openclaw-gateway.service
+
+# Make it read-only to prevent future modifications
+chmod 444 ~/.config/systemd/user/openclaw-gateway.service
+
+# Restart
+systemctl --user daemon-reload
+systemctl --user restart openclaw-gateway.service
+```
+
+**Prevention**: The bootstrap script now makes the service file read-only (`chmod 444`) to prevent OpenClaw from auto-modifying it.
+
 ## Maintenance
 
 ### Rotate gateway token

@@ -166,7 +166,14 @@ EOF
   echo ""
 fi
 
-verify ".env exists and is restricted" "test -f $ENV_FILE && stat -c '%a' $ENV_FILE | grep -q '600'"
+# Cross-platform stat check for file permissions
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  # macOS
+  verify ".env exists and is restricted" "test -f $ENV_FILE && stat -f '%Lp' $ENV_FILE | grep -q '600'"
+else
+  # Linux
+  verify ".env exists and is restricted" "test -f $ENV_FILE && stat -c '%a' $ENV_FILE | grep -q '600'"
+fi
 verify "Data dir exists"               "test -d ${OPENCLAW_DATA}"
 
 # Write openclaw.json with correct OpenCode Zen configuration
@@ -329,7 +336,22 @@ WantedBy=default.target
 EOF
 
 chown deploy:deploy "${SERVICE_DIR}/openclaw-gateway.service"
-ok "Created systemd user service file"
+
+# Make service file read-only to prevent OpenClaw from auto-modifying it
+# OpenClaw may try to change --bind parameter which breaks the service
+chmod 444 "${SERVICE_DIR}/openclaw-gateway.service"
+ok "Created systemd user service file (read-only to prevent auto-modification)"
+
+# Create a wrapper script to prevent accidental 'openclaw gateway install' from breaking things
+cat > /usr/local/bin/openclaw-gateway-protect <<'PROTECT_SCRIPT'
+#!/bin/bash
+# Wrapper to prevent 'openclaw gateway install' from overwriting our service
+echo "⚠️  Warning: 'openclaw gateway install' would overwrite the systemd service."
+echo "The service is already configured and protected."
+echo "If you need to reinstall, use: systemctl --user restart openclaw-gateway.service"
+exit 1
+PROTECT_SCRIPT
+chmod +x /usr/local/bin/openclaw-gateway-protect
 
 # Start dbus session and enable/start service as deploy user
 sudo -u deploy bash <<'DEPLOY_SCRIPT'

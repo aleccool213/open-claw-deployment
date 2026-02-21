@@ -19,6 +19,13 @@
 
 set -euo pipefail
 
+# Ensure we're running under bash, not fish or zsh
+if [ -z "${BASH_VERSION:-}" ]; then
+    echo "Error: This script must be run with bash, not $0" >&2
+    echo "Please run: bash $0" >&2
+    exit 1
+fi
+
 cd "$(dirname "$0")"
 
 RED='\033[0;31m'
