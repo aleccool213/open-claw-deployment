@@ -311,6 +311,23 @@ chown -R deploy:deploy "${DEPLOY_HOME}/.config"
 # Get the gateway token from .env
 GATEWAY_TOKEN=$(grep OPENCLAW_GATEWAY_TOKEN "$ENV_FILE" | cut -d= -f2)
 
+# Detect where openclaw binary is installed
+# It could be in /usr/bin (global npm) or ~/.npm-global/bin (user npm)
+OPENCLAW_BIN=$(sudo -u deploy bash -c 'export PATH="/home/deploy/.npm-global/bin:$PATH" && which openclaw' 2>/dev/null || echo "/home/deploy/.npm-global/bin/openclaw")
+
+# Create a wrapper script that ensures correct PATH
+sudo -u deploy tee /home/deploy/.openclaw/run-gateway.sh > /dev/null <<'WRAPPER'
+#!/bin/bash
+export PATH="/home/deploy/.npm-global/bin:$PATH"
+export HOME=/home/deploy
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus
+cd "$HOME"
+exec openclaw gateway --port 18789
+WRAPPER
+chmod +x /home/deploy/.openclaw/run-gateway.sh
+chown deploy:deploy /home/deploy/.openclaw/run-gateway.sh
+
 cat > "${SERVICE_DIR}/openclaw-gateway.service" <<EOF
 [Unit]
 Description=OpenClaw Gateway (v2026.2.6)
@@ -319,14 +336,14 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/node /usr/lib/node_modules/openclaw/dist/index.js gateway --port 18789
+ExecStart=/home/deploy/.openclaw/run-gateway.sh
 Restart=always
 RestartSec=5
 KillMode=process
 Environment="XDG_RUNTIME_DIR=/run/user/1000"
 Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus"
 Environment="HOME=/home/deploy"
-Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+Environment="PATH=/home/deploy/.npm-global/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="OPENCLAW_CONFIG_PATH=/home/deploy/.openclaw/openclaw.json"
 Environment="OPENCLAW_GATEWAY_PORT=18789"
 Environment="OPENCLAW_GATEWAY_TOKEN=${GATEWAY_TOKEN}"
