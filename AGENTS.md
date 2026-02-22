@@ -19,8 +19,9 @@ Heartbeats are periodic check-ins OpenClaw does to maintain context and keep the
 | Configure (deploy) | `ssh deploy@<IP> 'bash -s' < oc-configure.sh` |
 | SSH to VPS | `ssh deploy@$(hcloud server ip openclaw)` |
 | Open tunnel | `ssh -N -L 18789:127.0.0.1:18789 deploy@<IP>` |
-| View logs | `ssh deploy@<IP> "journalctl -u openclaw -f"` |
-| Restart gateway | `ssh deploy@<IP> "sudo systemctl restart openclaw"` |
+| View logs | `ssh deploy@<IP> "journalctl --user -u openclaw-gateway.service -f"` |
+| Restart gateway | `ssh deploy@<IP> "systemctl --user restart openclaw-gateway.service"` |
+| **Update OpenClaw** | `ssh deploy@<IP> 'bash -s' < oc-update.sh` |
 | Trigger backup | `sudo /usr/local/bin/openclaw-backup.sh` |
 
 
@@ -163,8 +164,32 @@ OpenCode Zen provides curated models optimized for coding agents.
 ### 2. Telegram Bot (REQUIRED)
 - Create via @BotFather in Telegram
 - Must be configured (script will fail without it)
-- Pairing required: User sends any message, admin approves with pairing code
 - Uses grammY with long-polling (works behind NAT/firewall)
+
+#### DM Access Modes
+
+| Mode | How it works | Survives updates? |
+|------|-------------|-------------------|
+| `pairing` | First message triggers approval flow; admin approves once | Only if keyring state persists |
+| `allowlist` | Pre-authorized numeric user IDs in config; no approval ever | **Yes — config survives updates** |
+| `open` | Any user can DM | Yes |
+| `disabled` | No DMs accepted | Yes |
+
+**Recommended: use `allowlist`** to avoid re-pairing after updates. Add your Telegram user ID (find it by messaging `@userinfobot`) to `channels.telegram.allowFrom` in `openclaw.json`:
+
+```json
+"channels": {
+  "telegram": {
+    "enabled": true,
+    "dmPolicy": "allowlist",
+    "allowFrom": ["123456789"],
+    "groupPolicy": "allowlist",
+    "streamMode": "partial"
+  }
+}
+```
+
+`oc-configure.sh` will prompt for your Telegram user ID and configure this automatically.
 
 ### 3. 1Password (REQUIRED)
 - Create Service Account at 1password.com → Developer → Service Accounts
@@ -357,11 +382,21 @@ sudo systemctl restart openclaw
 ```
 
 ### Update OpenClaw
+
+Use `oc-update.sh` for safe updates that preserve Telegram pairing state:
+
 ```bash
-ssh deploy@<IP>
-npm update -g openclaw
-sudo systemctl restart openclaw
+ssh deploy@<IP> 'bash -s' < oc-update.sh
 ```
+
+The script:
+1. Creates a timestamped backup of `~/.openclaw/` before updating
+2. Runs `npm install -g openclaw@latest`
+3. Restarts the gateway with proper D-Bus environment
+4. Verifies the gateway is healthy
+5. Prints rollback instructions if something goes wrong
+
+**Best practice**: also configure `dmPolicy: "allowlist"` (see Telegram section above) so Telegram messaging is immune to any state loss during updates.
 
 ### Restore from backup
 ```bash

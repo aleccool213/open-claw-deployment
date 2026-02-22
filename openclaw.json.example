@@ -43,7 +43,8 @@
   "channels": {
     "telegram": {
       "enabled": true,
-      "dmPolicy": "pairing",
+      "dmPolicy": "allowlist",
+      "allowFrom": ["YOUR_NUMERIC_TELEGRAM_USER_ID"],
       "groupPolicy": "allowlist",
       "streamMode": "partial"
     }

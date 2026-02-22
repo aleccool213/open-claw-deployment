@@ -150,6 +150,37 @@ else
   warn "Telegram token may be invalid"
 fi
 
+# Configure allowlist to avoid re-pairing after updates
+echo ""
+echo -e "  ${CYAN}Telegram DM access mode:${NC}"
+info "  'pairing'   — users must send a message and you approve them (one-time)"
+info "  'allowlist' — you pre-authorize user IDs; no approval needed ever"
+echo ""
+info "Using 'allowlist' means Telegram messaging survives updates with zero re-pairing."
+info "Find your Telegram user ID by sending /start to @userinfobot in Telegram."
+echo ""
+echo -n "  Your Telegram user ID(s) for allowlist (comma-separated numerics, or Enter for pairing mode): "
+read -r TELEGRAM_ALLOWLIST_INPUT
+
+TELEGRAM_ALLOWLIST=()
+if [[ -n "$TELEGRAM_ALLOWLIST_INPUT" ]]; then
+  IFS=',' read -ra raw_ids <<< "$TELEGRAM_ALLOWLIST_INPUT"
+  for raw_id in "${raw_ids[@]}"; do
+    trimmed_id="${raw_id// /}"
+    if [[ "$trimmed_id" =~ ^[0-9]+$ ]]; then
+      TELEGRAM_ALLOWLIST+=("$trimmed_id")
+    else
+      warn "Skipping invalid user ID: '${trimmed_id}' (must be numeric)"
+    fi
+  done
+fi
+
+if [[ "${#TELEGRAM_ALLOWLIST[@]}" -gt 0 ]]; then
+  ok "Allowlist mode: will authorize user IDs: ${TELEGRAM_ALLOWLIST[*]}"
+else
+  info "Using pairing mode (users must be approved after first message)"
+fi
+
 # ═════════════════════════════════════════════════════════════════════════════
 # 3. 1PASSWORD CLI (SERVICE ACCOUNT) - REQUIRED
 # ═════════════════════════════════════════════════════════════════════════════
@@ -440,6 +471,31 @@ fi
 # ═════════════════════════════════════════════════════════════════════════════
 # SAVE SECRETS TO .ENV FILE
 # ═════════════════════════════════════════════════════════════════════════════
+
+step "Updating Telegram channel config"
+
+if [[ "${#TELEGRAM_ALLOWLIST[@]}" -gt 0 ]]; then
+  # Build JSON array of allowlisted user IDs
+  ALLOWLIST_JSON="["
+  for i in "${!TELEGRAM_ALLOWLIST[@]}"; do
+    [[ $i -gt 0 ]] && ALLOWLIST_JSON+=","
+    ALLOWLIST_JSON+="\"${TELEGRAM_ALLOWLIST[$i]}\""
+  done
+  ALLOWLIST_JSON+="]"
+
+  # Update openclaw.json: switch to allowlist dmPolicy
+  if [[ -f "$CONFIG_FILE" ]]; then
+    jq --argjson ids "$ALLOWLIST_JSON" \
+      '.channels.telegram.dmPolicy = "allowlist" | .channels.telegram.allowFrom = $ids' \
+      "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+    chmod 600 "$CONFIG_FILE"
+    ok "Config updated: dmPolicy=allowlist, allowFrom=${ALLOWLIST_JSON}"
+  else
+    warn "Config file not found at ${CONFIG_FILE} — skipping Telegram allowlist update"
+  fi
+else
+  info "Keeping dmPolicy=pairing (no allowlist IDs provided)"
+fi
 
 step "Saving secrets to .env"
 
