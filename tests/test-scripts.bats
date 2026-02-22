@@ -136,7 +136,8 @@ setup() {
 }
 
 @test "configure script updates openclaw.json with jq for allowlist" {
-    grep -q "jq.*allowlist" "${SCRIPT_DIR}/oc-configure.sh"
+    grep -q "dmPolicy.*allowlist" "${SCRIPT_DIR}/oc-configure.sh"
+    grep -q "allowFrom" "${SCRIPT_DIR}/oc-configure.sh"
 }
 
 # ── oc-update.sh Specific Tests ──────────────────────────────────────────────
@@ -164,7 +165,7 @@ setup() {
 }
 
 @test "update script sources env file for D-Bus configuration" {
-    grep -q "source.*\.env" "${SCRIPT_DIR}/oc-update.sh"
+    grep -q "source.*ENV_FILE" "${SCRIPT_DIR}/oc-update.sh"
     grep -q "DBUS_SESSION_BUS_ADDRESS" "${SCRIPT_DIR}/oc-update.sh"
 }
 
