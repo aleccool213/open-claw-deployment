@@ -11,20 +11,20 @@ setup() {
 # ── General Script Tests ────────────────────────────────────────────────────
 
 @test "all scripts have correct shebang" {
-    for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh oc-load-secrets.sh lint-scripts.sh; do
+    for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh oc-load-secrets.sh oc-update.sh lint-scripts.sh; do
         run head -1 "${SCRIPT_DIR}/${script}"
         [ "$output" = "#!/usr/bin/env bash" ]
     done
 }
 
 @test "all scripts have set -euo pipefail" {
-    for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh oc-load-secrets.sh lint-scripts.sh; do
+    for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh oc-load-secrets.sh oc-update.sh lint-scripts.sh; do
         grep -q "set -euo pipefail" "${SCRIPT_DIR}/${script}"
     done
 }
 
 @test "all scripts are executable" {
-    for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh oc-load-secrets.sh lint-scripts.sh; do
+    for script in oc-provision.sh oc-bootstrap.sh oc-configure.sh oc-load-secrets.sh oc-update.sh lint-scripts.sh; do
         [ -x "${SCRIPT_DIR}/${script}" ]
     done
 }
@@ -127,6 +127,45 @@ setup() {
 @test "configure script has Todoist integration" {
     grep -q "Todoist" "${SCRIPT_DIR}/oc-configure.sh"
     grep -q "TODOIST_API_KEY" "${SCRIPT_DIR}/oc-configure.sh"
+}
+
+@test "configure script supports Telegram allowlist mode" {
+    grep -q "allowlist" "${SCRIPT_DIR}/oc-configure.sh"
+    grep -q "allowFrom" "${SCRIPT_DIR}/oc-configure.sh"
+    grep -q "userinfobot" "${SCRIPT_DIR}/oc-configure.sh"
+}
+
+@test "configure script updates openclaw.json with jq for allowlist" {
+    grep -q "jq.*allowlist" "${SCRIPT_DIR}/oc-configure.sh"
+}
+
+# ── oc-update.sh Specific Tests ──────────────────────────────────────────────
+
+@test "update script checks NOT run as root" {
+    grep -q "Don't run this as root" "${SCRIPT_DIR}/oc-update.sh" || \
+    grep -q "Run this as the deploy user, not root" "${SCRIPT_DIR}/oc-update.sh"
+}
+
+@test "update script creates pre-update backup" {
+    grep -q "pre-update" "${SCRIPT_DIR}/oc-update.sh"
+    grep -q "tar.*openclaw" "${SCRIPT_DIR}/oc-update.sh"
+}
+
+@test "update script uses npm to install latest version" {
+    grep -q "npm install -g openclaw@latest" "${SCRIPT_DIR}/oc-update.sh"
+}
+
+@test "update script restarts gateway service" {
+    grep -q "systemctl.*restart.*openclaw-gateway" "${SCRIPT_DIR}/oc-update.sh"
+}
+
+@test "update script verifies gateway health after restart" {
+    grep -q "curl.*18789" "${SCRIPT_DIR}/oc-update.sh"
+}
+
+@test "update script sources env file for D-Bus configuration" {
+    grep -q "source.*\.env" "${SCRIPT_DIR}/oc-update.sh"
+    grep -q "DBUS_SESSION_BUS_ADDRESS" "${SCRIPT_DIR}/oc-update.sh"
 }
 
 # ── oc-load-secrets.sh Specific Tests ────────────────────────────────────────
